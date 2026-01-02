@@ -141,6 +141,14 @@ static uint32_t map_key_to_lv(KeyId_t id)
     }
 }
 
+static uint32_t map_hw_to_special(KeyId_t id)
+{
+    switch(id) {
+    case KEY_DATA4:  return SPK_OPEN_HIDDEN_MENU;  // 예시
+    default:         return SPK_NONE;
+    }
+}
+
 static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
 {
     (void)indev;
@@ -159,6 +167,7 @@ static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
         /* keypad는 DOWN을 pressed로*/
         if (ev.type == KEYEV_DOWN) {
             uint32_t k = map_key_to_lv(ev.id);
+            k = map_hw_to_special(ev.id);
             if (k != 0) {
                 s_last_key = k;
                 data->key = (lv_key_t)k;
@@ -170,6 +179,7 @@ static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
         /* UP 시점에 release */
         if (ev.type == KEYEV_UP) {
             uint32_t k = map_key_to_lv(ev.id);
+            k = map_hw_to_special(ev.id);
             if (k != 0) {
                 s_last_key = k;
                 data->key = (lv_key_t)k;

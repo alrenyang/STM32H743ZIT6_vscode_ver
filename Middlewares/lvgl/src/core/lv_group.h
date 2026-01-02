@@ -37,6 +37,13 @@ typedef enum {
     LV_KEY_END       = 3,   /*0x03, ETX*/
 } lv_key_t;
 
+typedef enum {
+    SPK_NONE = 0,
+    SPK_TOGGLE_HELP,
+    SPK_OPEN_HIDDEN_MENU,
+    SPK_JUMP_TO_STATUS,
+    SPK_SLOT_QUICK_APPLY,
+} special_key_t;
 /**********************
  *      TYPEDEFS
  **********************/
