@@ -32,9 +32,10 @@
 #include "../Middlewares/lvgl/lvgl.h"
 #include "lv_port_disp.h"
 #include "lv_port_indev.h"
-#include "define.h"
+#include "com_define.h"
 #include "sdram.h"
 #include "widgets.h"
+#include "hw.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -728,6 +729,7 @@ void StartDefaultTask(void const * argument)
   /* init code for LWIP */
   MX_LWIP_Init();
   /* USER CODE BEGIN 5 */
+  hwInit();
   tcp_ip_config(&gnetif, user_ip, gete_way_ip);
   printf("Waiting for IP...\n");
 

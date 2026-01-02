@@ -55,12 +55,14 @@ ENTRY(Reset_Handler)
 /* Specify the memory areas */
 MEMORY
 {
-DTCMRAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 128K
-RAM (xrw)      : ORIGIN = 0x24000000, LENGTH = 512K
-RAM_D2 (xrw)      : ORIGIN = 0x30000000, LENGTH = 288K
-RAM_D3 (xrw)      : ORIGIN = 0x38000000, LENGTH = 64K
-ITCMRAM (xrw)      : ORIGIN = 0x00000000, LENGTH = 64K
-FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 2048K
+  DTCMRAM   (xrw)       : ORIGIN = 0x20000000, LENGTH = 128K
+  RAM       (xrw)       : ORIGIN = 0x24000000, LENGTH = 512K
+  RAM_D2    (xrw)       : ORIGIN = 0x30000000, LENGTH = 288K
+  RAM_D3    (xrw)       : ORIGIN = 0x38000000, LENGTH = 64K
+  ITCMRAM   (xrw)       : ORIGIN = 0x00000000, LENGTH = 64K
+  VECTOR    (rx)        : ORIGIN = 0x08000000,   LENGTH = 1K
+  VER       (rx)        : ORIGIN = 0x08000400,   LENGTH = 1K
+  FLASH     (rx)        : ORIGIN = 0x08000800, LENGTH = 2048K - 3K
 }
 
 /* Highest address of the user mode stack */
@@ -73,12 +75,24 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 SECTIONS
 {
   /* The startup code goes first into FLASH */
+  .fw_flash_begin :
+  {
+    _fw_flash_begin = .;
+  } >VECTOR
+
   .isr_vector :
   {
     . = ALIGN(4);
     KEEP(*(.isr_vector)) /* Startup code */
     . = ALIGN(4);
-  } >FLASH
+  } >VECTOR
+
+    .version :
+  {
+    . = ALIGN(4);
+    KEEP(*(.version))
+    . = ALIGN(4);
+  } >VER
 
   /* The program code and other data goes into FLASH */
   .text :
@@ -240,7 +254,23 @@ SECTIONS
     . = ALIGN(8);
   } >DTCMRAM
 
+  /* ETH_CODE: add placement of DMA descriptors and RX buffers */
+  .lwip_sec (NOLOAD) :
+  {
+    . = ABSOLUTE(0x30040000);
+    *(.RxDecripSection) 
+    
+    . = ABSOLUTE(0x30040060);
+    *(.TxDecripSection)
+    
+    . = ABSOLUTE(0x30040200);
+    *(.Rx_PoolSection)  
+  } >RAM_D2
 
+  .fw_flash_end :
+  {
+    _fw_flash_end = .;
+  } >FLASH
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

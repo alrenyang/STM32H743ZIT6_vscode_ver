@@ -112,6 +112,7 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     -Wno-expansion-to-defined
     -Os
+    -Wl,-Map=firmware.map
 )
 
 # Add linked libraries
