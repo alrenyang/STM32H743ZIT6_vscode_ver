@@ -45,6 +45,9 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 #하위 폴더의 모든 *.c를 포함 한다.
 file(GLOB_RECURSE SRC_FILES_RECURSE CONFIGURE_DEPENDS
     Middlewares/lvgl/*.c
+    App/driver/Src/*.c
+    App/Lvgl/Src/*.c
+
     # src/ap/*.cpp
     # src/ap/*.c
     # src/bsp/*.s
@@ -92,6 +95,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     Middlewares/lvgl
     Middlewares/
+    App/Lvgl/Inc/
+    App/driver/Inc/
 )
 
 # Add project symbols (macros)

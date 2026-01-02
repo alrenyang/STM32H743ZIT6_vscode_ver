@@ -20,18 +20,27 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "lwip.h"
-#include "lvgl.h"
-#include "lv_conf.h"
-#include "src/lv_init.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include <stdbool.h>
+#include "tcp_ip.h"
+#include "lwip/tcp.h"
+#include "lwip/pbuf.h"
+#include "lcd.h"
+#include "../Middlewares/lvgl/lvgl.h"
+#include "lv_port_disp.h"
+#include "lv_port_indev.h"
+#include "define.h"
+#include "sdram.h"
+#include "widgets.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+uint16_t *FrameBuffer = (uint16_t *)LCD_FB_ADDR;
+extern struct netif gnetif;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -75,7 +84,15 @@ static void MX_LTDC_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
+uint8_t gete_way_ip[4] = {192,168,0,1};	//user set up
+uint8_t user_ip[4] = {192,168,0,50};
+uint16_t Port_No = 5001;
 
+volatile bool btcp_connect = false;
+
+uint8_t g_tcp_recv_buffer[TCP_RECV_BUF_SIZE];	//TCP로 데이터를 받는다...
+volatile uint32_t g_tcp_recv_len = 0;
+volatile bool g_tcp_new_data_flag = false;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -131,6 +148,16 @@ int main(void)
   MX_LTDC_Init();
   /* USER CODE BEGIN 2 */
 
+  //LAN8742 RESET PIN
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_Delay(100);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, GPIO_PIN_SET);
+  HAL_Delay(500);
+
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);	//DISP Control
+  HAL_Delay(250); // Datasheet: Wait T2 (250ms min) after DISP High before turning on Backlight
+  HAL_GPIO_WritePin(GPIOA, LCD_BAK_Pin, GPIO_PIN_SET);	//LCD Backlight Enable
+
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -151,7 +178,7 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of MainTask */
-  osThreadDef(MainTask, StartDefaultTask, osPriorityNormal, 0, 256);
+  osThreadDef(MainTask, StartDefaultTask, osPriorityNormal, 0, 2048);
   MainTaskHandle = osThreadCreate(osThread(MainTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -366,7 +393,7 @@ static void MX_LTDC_Init(void)
   pLayerCfg.Alpha0 = 255;
   pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
   pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-  pLayerCfg.FBStartAdress = 0xC0000000;
+  pLayerCfg.FBStartAdress = LCD_ST_ADDR;
   pLayerCfg.ImageWidth = 480;
   pLayerCfg.ImageHeight = 272;
   pLayerCfg.Backcolor.Blue = 0;
@@ -521,7 +548,89 @@ static void MX_FMC_Init(void)
   }
 
   /* USER CODE BEGIN FMC_Init 2 */
+static FMC_SDRAM_CommandTypeDef Command;
 
+
+  Command.CommandMode            = FMC_SDRAM_CMD_CLK_ENABLE;
+  Command.CommandTarget          = FMC_SDRAM_CMD_TARGET_BANK1;
+  Command.AutoRefreshNumber      = 1;
+  Command.ModeRegisterDefinition = 0;
+
+  if(HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT) != HAL_OK)
+  {
+	 printf("[  ] sdram step 1 fail\n");
+	 Error_Handler( );
+  }
+
+//  osDelay(1);
+  HAL_Delay(1);
+
+
+  Command.CommandMode            = FMC_SDRAM_CMD_PALL;
+  Command.CommandTarget          = FMC_SDRAM_CMD_TARGET_BANK1;
+  Command.AutoRefreshNumber      = 1;
+  Command.ModeRegisterDefinition = 0;
+  if(HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT) != HAL_OK)
+  {
+	printf("[  ] sdram step 3 fail\n");
+	Error_Handler( );
+  }
+
+  Command.CommandMode            = FMC_SDRAM_CMD_AUTOREFRESH_MODE;
+  Command.CommandTarget          = FMC_SDRAM_CMD_TARGET_BANK1;
+  Command.AutoRefreshNumber      = 8;
+  Command.ModeRegisterDefinition = 0;
+  if(HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT) != HAL_OK)
+  {
+	printf("[  ] sdram step 4 fail\n");
+    Error_Handler( );
+  }
+
+  uint32_t mode_reg = 0;
+
+  mode_reg |= (2 << 0); // Burst Length = 4
+  mode_reg |= (0 << 3); // Burst Type
+                        //   0 : Sequential
+                        //   1 : Interleaved
+  mode_reg |= (2 << 4); // CAS Latency Mode
+                        //   2 :
+                        //   3 :
+  mode_reg |= (0 << 7); // Operation Mode
+  mode_reg |= (0 << 9); // Write Burst Mode
+                        //   0 : Programmed Burst Length
+                        //   1 : Single Location Access
+
+  Command.CommandMode            = FMC_SDRAM_CMD_LOAD_MODE;
+  Command.CommandTarget          = FMC_SDRAM_CMD_TARGET_BANK1;
+  Command.AutoRefreshNumber      = 1;
+  Command.ModeRegisterDefinition = mode_reg;
+  if(HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT) != HAL_OK)
+  {
+	printf("[  ] sdram step 5 fail\n");
+	Error_Handler( );
+  }
+// Step 6: Set the refresh rate counter
+//
+// refresh rate = (COUNT + 1) * SDRAM clock freq (95Mhz)
+//
+// COUNT = (SDRAM refresh period/Number of rows) - 20
+//       = (64ms / 8192) - 20
+//       = 7.81us * 95 - 20 = 722
+  uint32_t fmc_hz   = FMC_GetKernelClock_Hz();
+  uint32_t sdclk_hz = fmc_hz / 2; // SDClockPeriod=2 이면 FMC_CLK/2
+
+  uint32_t refresh_count = SDRAM_RefreshCount_IS42S16400J(sdclk_hz);
+  refresh_count = (refresh_count * 130) / 100;
+
+  printf("FMC=%lu Hz, SDCLK=%lu Hz, refresh=%lu\r\n", (unsigned long)fmc_hz, (unsigned long)sdclk_hz, (unsigned long)refresh_count);
+
+  HAL_SDRAM_ProgramRefreshRate(&hsdram1, refresh_count);
+
+  if (HAL_SDRAM_ProgramRefreshRate(&hsdram1, refresh_count) != HAL_OK)
+  {
+	  printf("[  ] sdram step 5 fail\n");
+	  Error_Handler();
+  }
   /* USER CODE END FMC_Init 2 */
 }
 
@@ -619,11 +728,60 @@ void StartDefaultTask(void const * argument)
   /* init code for LWIP */
   MX_LWIP_Init();
   /* USER CODE BEGIN 5 */
-  printf("test %d",LV_COLOR_DEPTH);
+  tcp_ip_config(&gnetif, user_ip, gete_way_ip);
+  printf("Waiting for IP...\n");
+
+  /* Wait until IP acquired */
+  while (ip4_addr_isany_val(*netif_ip4_addr(&gnetif))) {
+		osDelay(200);
+  }
+  printf("IP Ready: %s\n", ip4addr_ntoa(netif_ip4_addr(&gnetif)));
+
+  osDelay(200);
+
+  LOCK_TCPIP_CORE();
+  btcp_connect = tcp_server_init(Port_No);
+  UNLOCK_TCPIP_CORE();
+
+  LCD_ShowLogo();
+  SCB_CleanDCache_by_Addr((uint32_t *)FrameBuffer, LCD_WIDTH * LCD_HEIGHT * 2); // 2 bytes per pixel
+  osDelay(500);
+
+  lv_init();	//lvgl init
+  lv_port_disp_init();	//display init
+  lv_port_indev_init();	//input device init
+
+  ui_strobe_t *ui = widgets_create_strobe_screen();
+  lv_scr_load(ui->scr);
+
+  lv_indev_t * enc = lv_port_indev_get_encoder();
+  widgets_bind_encoder(ui, enc);
+
+  uint32_t pre_time;
+  pre_time = HAL_GetTick();
 
   /* Infinite loop */
   for(;;)
   {
+    if(HAL_GetTick() - pre_time >= 500)
+    {
+      pre_time = HAL_GetTick();
+      HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_12);
+
+      if(g_tcp_new_data_flag)
+      {
+        printf("Received new data: %.*s\n", (int)g_tcp_recv_len, g_tcp_recv_buffer);
+        g_tcp_new_data_flag = false;
+
+        char *response = "Ok\n";
+        tcp_send_data((uint8_t*)response, strlen(response));
+      }
+    }
+    
+    lv_tick_inc(1);
+    lv_port_indev_poll_5ms();	//키 및 로터리 스캔
+    lv_timer_handler();
+
     osDelay(1);
   }
   /* USER CODE END 5 */

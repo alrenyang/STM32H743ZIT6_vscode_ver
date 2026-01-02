@@ -24,6 +24,12 @@
 			"group": "build",
 			"problemMatcher": [],
 			"detail": "CMake 템플릿 다시 빌드 정리 작업"
-		}
+		},
+		{
+            "label": "flash_down",
+            "type": "shell",
+            "command": "stm32_programmer_cli -c port=SWD -w build/stm32h7_4inchgfx.elf",
+            "problemMatcher": [],
+        }
 	]
 }
