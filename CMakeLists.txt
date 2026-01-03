@@ -113,6 +113,8 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     -Wno-expansion-to-defined
     -Os
     -Wl,-Map=firmware.map
+    -g3 -Og
+    -fno-omit-frame-pointer
 )
 
 # Add linked libraries
