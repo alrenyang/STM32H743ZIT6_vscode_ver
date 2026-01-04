@@ -12,6 +12,22 @@ extern "C" {
 #define UI_MAX_CH 32
 #endif
 
+#define TBL_COLS 5
+
+typedef enum {
+    CH_F_ON = 0,
+    CH_F_DELAY,
+    CH_F_BLOCK,
+    CH_F_TRG,
+} ch_field_t;
+
+#define ON_MIN      1
+#define ON_MAX      9999
+#define DELAY_MIN   0
+#define DELAY_MAX   9999
+#define BLOCK_MIN   0
+#define BLOCK_MAX   9999
+
 typedef struct {
     uint16_t on;     /* us (e.g. 1~1000) */
     uint16_t delay;  /* us (e.g. 0~10000) */
@@ -22,9 +38,10 @@ typedef struct {
 typedef struct {
     lv_obj_t * scr;
 
-    /*add: blank screen */
-    lv_obj_t * scr_blank;
-    lv_obj_t * blank_focus;
+    lv_obj_t * CH_panel_mask;
+    lv_obj_t * CH_panel;
+    lv_obj_t * CH_btn_close;
+    lv_obj_t * focus_restore;
 
     lv_obj_t * header;
     lv_obj_t * body;
@@ -59,6 +76,16 @@ typedef struct {
     uint16_t   ch_count;       /* current channel count */
     ch_data_t * ch_data;       /* array length ch_count */
 
+    /* modal group */
+    lv_group_t * ch_grp_prev;
+    lv_group_t * ch_grp;
+    lv_timer_t * ch_timer;
+
+    /* value rows (On/Delay/Block/Trg) */
+    lv_obj_t * ch_item_btn[4];
+    lv_obj_t * ch_item_val[4];
+    lv_obj_t * ch_title;     /* "CHxx" 표시용 라벨 */
+
 } ui_strobe_t;
 
 ui_strobe_t * widgets_create_strobe_screen(void);
@@ -67,6 +94,8 @@ void widgets_bind_encoder(ui_strobe_t * ui, lv_indev_t * indev_encoder);
 /* Optional helpers */
 void widgets_table_set_channel_count(ui_strobe_t * ui, uint16_t new_count);
 void widgets_table_set_cell(ui_strobe_t * ui, uint16_t ch0, uint16_t col, const char * txt);
+void table_format_cell(ui_strobe_t * ui, uint16_t row, uint16_t col);
+
 
 #ifdef __cplusplus
 }

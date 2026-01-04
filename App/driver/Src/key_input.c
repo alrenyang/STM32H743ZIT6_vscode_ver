@@ -33,7 +33,7 @@ static const GpioRef_t s_encA = { EN_A_GPIO_Port, EN_A_Pin };
 static const GpioRef_t s_encB = { EN_B_GPIO_Port, EN_B_Pin };
 
 static KeyConfig_t s_cfg = {
-    .debounce_ms      = 50,
+    .debounce_ms      = 80,
     .longpress_ms     = 800,
     .repeat_start_ms  = 0,
     .repeat_period_ms = 200,
@@ -136,9 +136,9 @@ bool KeyInput_IsPressed(KeyId_t id)
  * table-based decoder (noise robust)
  * detent = 4 step 가정 (필요시 변경)
  */
+static volatile int16_t s_enc_diff;
 static uint8_t s_enc_prev = 0;
 static int16_t s_enc_acc  = 0;     // 내부 누적(4step 모아서 detent)
-static int16_t s_enc_diff = 0;     // 외부로 내보낼 diff(누적)
 
 static const int8_t s_qdec_table[16] = {
      0, -1, +1,  0,
@@ -176,8 +176,15 @@ static void rotary_tick(void)
 
 int16_t KeyInput_EncoderGetDiffAndClear(void)
 {
-    int16_t d = s_enc_diff;
+    int16_t d;
+
+    uint32_t primask = __get_PRIMASK(); 
+    __disable_irq();
+
+    d = s_enc_diff;
     s_enc_diff = 0;
+
+    if(!primask) __enable_irq();
     return d;
 }
 

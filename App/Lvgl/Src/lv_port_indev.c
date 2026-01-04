@@ -35,6 +35,9 @@ static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data);
 // static bool touchpad_is_pressed(void);
 // static void touchpad_get_xy(int32_t * x, int32_t * y);
 
+static void button_read(lv_indev_t * indev, lv_indev_data_t * data);
+static int  my_hardware_button_scan_function(void);
+
 /**********************
  *  STATIC VARIABLES
  **********************/
@@ -43,7 +46,24 @@ lv_indev_t * indev_touchpad;
 static lv_indev_t * indev_encoder;
 static lv_indev_t * indev_keypad;
 
+/* ===== BUTTON indev ===== */
+static lv_indev_t * indev_button;
+
+/* 하드웨어 버튼 ID(0..N-1) => 화면 좌표 매핑 */
+static const lv_point_t s_btn_points[] = {
+    { 12,  30 },   /* btn_id 0 : 예) KEY_DATA0 */
+    { 60,  90 },   /* btn_id 1 : 예) KEY_DATA1 */
+    {120,  90 },   /* btn_id 2 : 예) KEY_DATA2 */
+    {180,  90 },   /* btn_id 3 : 예) KEY_DATA3 */
+    {240,  90 },   /* btn_id 4 : 예) KEY_DATA4 */
+};
+#define HW_BTN_COUNT  (sizeof(s_btn_points)/sizeof(s_btn_points[0]))
+
 static uint32_t s_last_key = 0;
+
+/**********************
+ *  GETTERS
+ **********************/
 
 lv_indev_t * lv_port_indev_get_encoder(void) { return indev_encoder; }
 lv_indev_t * lv_port_indev_get_keypad(void)  { return indev_keypad;  }
@@ -84,7 +104,7 @@ void lv_port_indev_init(void)
 
     /* ===== KeyInput init ===== */
     KeyConfig_t cfg = {
-		.debounce_ms = 25,
+		.debounce_ms = 80,
 		.longpress_ms = 800,
 		.repeat_start_ms = 0,
 		.repeat_period_ms = 200
@@ -100,6 +120,15 @@ void lv_port_indev_init(void)
 	indev_keypad = lv_indev_create();
 	lv_indev_set_type(indev_keypad, LV_INDEV_TYPE_KEYPAD);
 	lv_indev_set_read_cb(indev_keypad, keypad_read);
+
+    /* ===== BUTTON indev 등록 ===== */
+    indev_button = lv_indev_create();
+    lv_indev_set_type(indev_button, LV_INDEV_TYPE_BUTTON);
+    lv_indev_set_read_cb(indev_button, button_read);
+
+    /* 버튼 ID ↔ 화면 좌표 연결 */
+    lv_indev_set_button_points(indev_button, s_btn_points);
+
 
 }
 
@@ -145,7 +174,7 @@ static uint32_t map_hw_to_special(KeyId_t id)
 {
     switch(id) {
     case KEY_DATA4:  return SPK_OPEN_HIDDEN_MENU;  // 예시
-    default:         return SPK_NONE;
+    default:         return 0;
     }
 }
 
@@ -167,7 +196,7 @@ static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
         /* keypad는 DOWN을 pressed로*/
         if (ev.type == KEYEV_DOWN) {
             uint32_t k = map_key_to_lv(ev.id);
-            k = map_hw_to_special(ev.id);
+            if(k == 0) k = map_key_to_lv(ev.id);
             if (k != 0) {
                 s_last_key = k;
                 data->key = (lv_key_t)k;
@@ -179,7 +208,7 @@ static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
         /* UP 시점에 release */
         if (ev.type == KEYEV_UP) {
             uint32_t k = map_key_to_lv(ev.id);
-            k = map_hw_to_special(ev.id);
+            if(k == 0) k = map_key_to_lv(ev.id);
             if (k != 0) {
                 s_last_key = k;
                 data->key = (lv_key_t)k;
@@ -189,6 +218,44 @@ static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
         }
     }
 }
+
+/* ================= BUTTON indev =================
+ * 여기서는 이벤트 큐(KeyInput_GetEvent)를 소비하지 않고,
+ * “현재 눌림 상태”만 보고 좌표 클릭을 만들어 충돌을 피함.
+ */
+static int my_hardware_button_scan_function(void)
+{
+    /* 눌린 버튼이 있으면 해당 id 리턴, 없으면 -1 */
+    if (KeyInput_IsPressed(KEY_DATA0)) return 0;
+    if (KeyInput_IsPressed(KEY_DATA1)) return 1;
+    if (KeyInput_IsPressed(KEY_DATA2)) return 2;
+    if (KeyInput_IsPressed(KEY_DATA3)) return 3;
+    if (KeyInput_IsPressed(KEY_DATA4)) return 4;
+    return -1;
+}
+
+static void button_read(lv_indev_t * indev, lv_indev_data_t * data)
+{
+    (void)indev;
+    static uint16_t last_btn = 0;
+    static bool prev_pressed = false;
+
+    int id = my_hardware_button_scan_function();
+
+    if (id >= 0 && id < (int)HW_BTN_COUNT) {
+        last_btn = (uint16_t)id;
+        data->btn_id = last_btn;
+        data->state  = LV_INDEV_STATE_PRESSED;
+        prev_pressed = true;
+    } else {
+        data->btn_id = last_btn;
+        data->state  = prev_pressed ? LV_INDEV_STATE_RELEASED
+                                    : LV_INDEV_STATE_RELEASED;
+        prev_pressed = false;
+    }
+}
+
+
 
 /* ================= Keypad read =================
  * LVGL은 data->key에 LV_KEY_* 를 넣어줘야 함.

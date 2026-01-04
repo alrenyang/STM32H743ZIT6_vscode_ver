@@ -784,7 +784,7 @@ void StartDefaultTask(void const * argument)
     lv_port_indev_poll_5ms();	//키 및 로터리 스캔
     lv_timer_handler();
 
-    osDelay(1);
+    // osDelay(1);
   }
   /* USER CODE END 5 */
 }

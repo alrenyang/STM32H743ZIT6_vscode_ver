@@ -1,11 +1,14 @@
 #include "widgets.h"
 #include "lv_port_indev.h"
+#include "key_input.h"
+#include "lvgl.h"
 #include <stdlib.h>
 #include <stdio.h>
 /* Encoder focus group (footer buttons only).
  * Table cells are intentionally NOT focusable and do NOT handle LV_EVENT_KEY.
  */
 static lv_group_t * s_group = NULL;
+
 
 
 /* ===== 480x272 fixed layout ===== */
@@ -40,44 +43,19 @@ static inline int DISP_H(void) {
 #define C_GOLD    lv_color_hex(0xD7B36A)
 #define C_RED     lv_color_hex(0xFF4D4D)
 
-static void row_event_cb(lv_event_t * e);
-static void blank_focus_event_cb(lv_event_t * e);
-static void ui_open_blank_screen(ui_strobe_t * ui);
-static void ui_close_blank_screen(ui_strobe_t * ui);
+
+/* forward declarations */
+static int  ch_get_focused_field(ui_strobe_t * ui);
+static void ch_panel_refresh(ui_strobe_t * ui);
+static void ch_edit_timer_cb(lv_timer_t * t);
 
 
 
 /* ===== Styles ===== */
 static lv_style_t st_scr, st_hdr, st_ftr, st_panel;
 static lv_style_t st_btn, st_btn_focus, st_btn_primary, st_tag, st_tag_bad;
-static lv_style_t st_row, st_row_focus;
+static lv_style_t st_row, st_row_focus;	//포커스 스타일
 static bool s_style_inited = false;
-
-static void table_cell_clicked_cb(lv_event_t * e)
-{
-    ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
-    lv_obj_t * btn = lv_event_get_target(e);
-    if(!ui || !btn) return;
-
-    /* r,c를 user_data에 packed 해둔 값을 꺼냄 */
-    uintptr_t pack = (uintptr_t)lv_obj_get_user_data(btn);
-    uint16_t r = (uint16_t)((pack >> 8) & 0xFF);
-    uint16_t c = (uint16_t)(pack & 0xFF);
-
-    /* ✅ 여기서 “셀을 눌렀을 때(엔터/PUSH 포함)” 원하는 동작 구현 */
-    /* 예) 디버그 표시 */
-    printf("[CELL CLICK] r=%u c=%u\n", (unsigned)r, (unsigned)c);
-
-    /* 예) 셀 라벨을 임시로 바꿔서 동작 확인 */
-    lv_obj_t * lbl = lv_obj_get_child(btn, 0);
-    if(lbl) {
-        char buf[32];
-        lv_snprintf(buf, sizeof(buf), "R%uC%u", (unsigned)(r+1), (unsigned)(c+1));
-        lv_label_set_text(lbl, buf);
-        lv_obj_center(lbl);
-    }
-}
-
 
 static void styles_init(void)
 {
@@ -152,16 +130,425 @@ static void styles_init(void)
     lv_style_set_text_color(&st_tag_bad, lv_color_hex(0xFFD3D3));
     /* ===== Row focus styles (for encoder row navigation) ===== */
     lv_style_init(&st_row);
-    lv_style_set_radius(&st_row, 6);
+    lv_style_set_radius(&st_row, 10);
     lv_style_set_bg_opa(&st_row, LV_OPA_TRANSP);
 
     lv_style_init(&st_row_focus);
     lv_style_set_bg_color(&st_row_focus, lv_color_hex(0x0F2430));
     lv_style_set_bg_opa(&st_row_focus, LV_OPA_COVER);
     lv_style_set_outline_color(&st_row_focus, C_TEAL);
-    lv_style_set_outline_width(&st_row_focus, 2);
-    lv_style_set_outline_pad(&st_row_focus, 1);
+    lv_style_set_outline_width(&st_row_focus, 1);
+    lv_style_set_outline_pad(&st_row_focus, 0);
+    lv_style_set_radius(&st_row_focus, 10);
+    lv_style_set_pad_left(&st_row_focus, 1);
+    lv_style_set_pad_right(&st_row_focus, 1);
 }
+
+static void ch_edit_timer_cb(lv_timer_t * t)
+{
+	ui_strobe_t * ui = (ui_strobe_t *)lv_timer_get_user_data(t);
+    if(!ui || !ui->CH_panel_mask) return;
+    if(!ui->ch_grp || !lv_group_get_editing(ui->ch_grp)) return;
+
+    int diff = (int)KeyInput_EncoderGetDiffAndClear();   // -/0/+
+    if(diff == 0) return;
+
+    int dir = (diff > 0) ? +1 : -1;
+
+    int field = ch_get_focused_field(ui);
+    if(field < 0) return;
+
+    uint16_t r = ui->sel_row;
+    if(r >= ui->ch_count) return;
+
+    switch(field) {
+    case 0: { /* ON */
+        int v = (int)ui->ch_data[r].on + dir;
+        if(v < ON_MIN) v = ON_MIN;
+        if(v > ON_MAX) v = ON_MAX;
+        ui->ch_data[r].on = (uint16_t)v;
+    } break;
+
+    case 1: { /* DELAY */
+        int v = (int)ui->ch_data[r].delay + dir;
+        if(v < DELAY_MIN) v = DELAY_MIN;
+        if(v > DELAY_MAX) v = DELAY_MAX;
+        ui->ch_data[r].delay = (uint16_t)v;
+    } break;
+
+    case 2: { /* BLOCK */
+        int v = (int)ui->ch_data[r].block + dir;
+        if(v < BLOCK_MIN) v = BLOCK_MIN;
+        if(v > BLOCK_MAX) v = BLOCK_MAX;
+        ui->ch_data[r].block = (uint16_t)v;
+    } break;
+
+    case 3: { /* TRG */
+        char t2 = ui->ch_data[r].trg;
+        if(dir > 0) t2 = (t2=='F')?'R':(t2=='R')?'B':'F';
+        else        t2 = (t2=='F')?'B':(t2=='B')?'R':'F';
+        ui->ch_data[r].trg = t2;
+    } break;
+    }
+
+    ch_panel_refresh(ui);
+
+    /* 테이블 갱신(컬럼 수 5 고정) */
+    for(uint16_t c=0; c<5; c++) {
+        table_format_cell(ui, r, c);
+    }
+}
+
+
+static int ch_get_focused_field(ui_strobe_t * ui)
+{
+    if(!ui || !ui->ch_grp) return -1;
+    lv_obj_t * f = lv_group_get_focused(ui->ch_grp);
+    for(int i=0;i<4;i++){
+        if(ui->ch_item_btn[i] == f) return i;
+    }
+    return -1;
+}
+
+/* 값 표시 갱신 */
+static void ch_panel_refresh(ui_strobe_t * ui)
+{
+    if(!ui) return;
+    uint16_t r = ui->sel_row;
+    if(r >= ui->ch_count) r = 0;
+
+    if(ui->ch_title) {
+        char t[16];
+        lv_snprintf(t, sizeof(t), "CH %02u", (unsigned)(r+1));
+        lv_label_set_text(ui->ch_title, t);
+    }
+
+    if(ui->ch_item_val[0]) { char s[24]; lv_snprintf(s,sizeof(s),"%u", (unsigned)ui->ch_data[r].on);    lv_label_set_text(ui->ch_item_val[0], s); }
+    if(ui->ch_item_val[1]) { char s[24]; lv_snprintf(s,sizeof(s),"%u", (unsigned)ui->ch_data[r].delay); lv_label_set_text(ui->ch_item_val[1], s); }
+    if(ui->ch_item_val[2]) { char s[24]; lv_snprintf(s,sizeof(s),"%u", (unsigned)ui->ch_data[r].block); lv_label_set_text(ui->ch_item_val[2], s); }
+    if(ui->ch_item_val[3]) { char s[8];  lv_snprintf(s,sizeof(s),"%c", ui->ch_data[r].trg);             lv_label_set_text(ui->ch_item_val[3], s); }
+}
+
+
+static lv_obj_t * ch_make_item(ui_strobe_t * ui,
+                               lv_obj_t * parent,
+                               const char * name,
+                               int idx)
+{
+    (void)name;  /* name은 헤더에서만 사용 */
+
+    lv_obj_t * btn = lv_btn_create(parent);
+
+    /* ===== 가로 균등 분배 핵심 ===== */
+    lv_obj_set_flex_grow(btn, 1);     // 부모 ROW에서 균등 분배
+    lv_obj_set_height(btn, 32);       // 버튼 높이 고정
+
+    /* ===== 스타일 ===== */
+    lv_obj_set_style_radius(btn, 6, 0);
+    lv_obj_set_style_pad_all(btn, 0, 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_20, 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1C2B34), 0);
+
+    /* 포커스 테두리 */
+    lv_obj_set_style_border_width(btn, 2, LV_STATE_FOCUSED);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x2DE0C7), LV_STATE_FOCUSED);
+
+    /* ===== 값 라벨만 생성 (중앙 정렬) ===== */
+    lv_obj_t * l_val = lv_label_create(btn);
+    lv_label_set_text(l_val, "-");
+    lv_obj_set_style_text_color(l_val, lv_color_hex(0xDDE6EE), 0);
+    lv_obj_center(l_val);
+
+    ui->ch_item_btn[idx] = btn;
+    ui->ch_item_val[idx] = l_val;
+
+    return btn;
+}
+
+static void ch_item_event_cb(lv_event_t * e)
+{
+    ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
+    lv_event_code_t code = lv_event_get_code(e);
+    if(!ui || !ui->ch_grp) return;
+
+    if(code == LV_EVENT_CLICKED) {
+        bool ed = lv_group_get_editing(ui->ch_grp);
+        lv_group_set_editing(ui->ch_grp, !ed);
+        return;
+    }
+
+    if(code == LV_EVENT_KEY) {
+        uint32_t key = lv_event_get_key(e);
+        if(key == LV_KEY_ENTER) {
+            bool ed = lv_group_get_editing(ui->ch_grp);
+            lv_group_set_editing(ui->ch_grp, !ed);
+        }
+    }
+}
+
+static void CHPannel_close(ui_strobe_t * ui)
+{
+    if(!ui) return;
+
+    /* 타이머 멈춤 */
+    if(ui->ch_timer) lv_timer_pause(ui->ch_timer);
+
+    /* indev group 원복 */
+    lv_indev_t * enc = lv_port_indev_get_encoder();
+    lv_indev_t * kp  = lv_port_indev_get_keypad();
+    if(ui->ch_grp_prev) {
+        if(enc) lv_indev_set_group(enc, ui->ch_grp_prev);
+        if(kp)  lv_indev_set_group(kp,  ui->ch_grp_prev);
+    }
+
+    /* 모달 그룹 삭제 */
+    if(ui->ch_grp) {
+        lv_group_del(ui->ch_grp);
+        ui->ch_grp = NULL;
+    }
+    ui->ch_grp_prev = NULL;
+
+    /* 오브젝트 삭제 */
+    if(ui->CH_panel_mask) {
+        lv_obj_del(ui->CH_panel_mask);
+        ui->CH_panel_mask = NULL;
+        ui->CH_panel = NULL;
+    }
+    ui->CH_btn_close = NULL;
+    ui->ch_title = NULL;
+    for(int i=0;i<4;i++){ ui->ch_item_btn[i]=NULL; ui->ch_item_val[i]=NULL; }
+}
+
+
+
+
+static void CHPannel_mask_event_cb(lv_event_t * e)
+{
+    ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
+    lv_event_code_t code = lv_event_get_code(e);
+    if(code == LV_EVENT_CLICKED) {
+    	CHPannel_close(ui);   // 바깥(마스크) 누르면 닫기
+    }
+}
+
+static void CHPannel_close_btn_cb(lv_event_t * e)
+{
+    ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
+    if(!ui) return;
+
+    CHPannel_close(ui);
+}
+
+static void CH_open(ui_strobe_t * ui)
+{
+    if(!ui) return;
+    if(ui->CH_panel_mask) return;
+
+    lv_obj_t * scr = lv_screen_active();
+
+    /* ===== 마스크 ===== */
+    ui->CH_panel_mask = lv_obj_create(scr);
+    lv_obj_remove_style_all(ui->CH_panel_mask);
+    lv_obj_set_size(ui->CH_panel_mask, LCD_W, LCD_H);
+    lv_obj_set_pos(ui->CH_panel_mask, 0, 0);
+    lv_obj_set_style_bg_opa(ui->CH_panel_mask, LV_OPA_50, 0);
+    lv_obj_set_style_bg_color(ui->CH_panel_mask, lv_color_black(), 0);
+    lv_obj_add_flag(ui->CH_panel_mask, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(ui->CH_panel_mask, CHPannel_mask_event_cb, LV_EVENT_CLICKED, ui);
+
+    /* ===== 패널(2/3) ===== */
+    const lv_coord_t pw = (LCD_W * 2) / 3;
+    const lv_coord_t ph = (LCD_H * 2) / 3;
+
+    ui->CH_panel = lv_obj_create(ui->CH_panel_mask);
+    lv_obj_remove_style_all(ui->CH_panel);
+    lv_obj_set_size(ui->CH_panel, pw, ph);
+    lv_obj_center(ui->CH_panel);
+
+    lv_obj_set_style_bg_opa(ui->CH_panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(ui->CH_panel, lv_color_hex(0x0B1118), 0);
+    lv_obj_set_style_radius(ui->CH_panel, 10, 0);
+    lv_obj_set_style_border_width(ui->CH_panel, 2, 0);
+    lv_obj_set_style_border_color(ui->CH_panel, lv_color_hex(0x2DE0C7), 0);
+    lv_obj_set_style_pad_all(ui->CH_panel, 12, 0);
+    lv_obj_set_style_pad_row(ui->CH_panel, 8, 0);
+    lv_obj_set_flex_flow(ui->CH_panel, LV_FLEX_FLOW_COLUMN);
+
+    /* ===== 타이틀 ===== */
+    ui->ch_title = lv_label_create(ui->CH_panel);
+    lv_label_set_text(ui->ch_title, "CH");
+    lv_obj_set_style_text_color(ui->ch_title, lv_color_hex(0x2DE0C7), 0);
+    lv_obj_set_style_text_font(ui->ch_title, &lv_font_montserrat_16, 0);
+
+    lv_obj_t * hdr = lv_obj_create(ui->CH_panel);
+    lv_obj_remove_style_all(hdr);
+    lv_obj_set_width(hdr, LV_PCT(100));
+    lv_obj_set_height(hdr, 18);
+    lv_obj_set_flex_flow(hdr, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(hdr, 8, 0);
+    lv_obj_set_flex_align(
+        hdr,
+        LV_FLEX_ALIGN_SPACE_BETWEEN,
+        LV_FLEX_ALIGN_CENTER,
+        LV_FLEX_ALIGN_CENTER
+    );
+    /* 4개 타이틀 라벨 */
+    static const char * titles[4] = {"On", "Delay", "Block", "Trg"};
+    for(int i=0;i<4;i++){
+        lv_obj_t * t = lv_label_create(hdr);
+        lv_label_set_text(t, titles[i]);
+        lv_obj_set_style_text_color(t, lv_color_hex(0x2DE0C7), 0); // C_TEAL 느낌
+
+        /*  list의 버튼들과 같은 폭 분배 */
+        lv_obj_set_flex_grow(t, 1);
+        lv_obj_set_style_text_align(t, LV_TEXT_ALIGN_CENTER, 0);
+    }
+
+    /* ===== 항목 리스트 컨테이너 ===== */
+    lv_obj_t * list = lv_obj_create(ui->CH_panel);
+    lv_obj_remove_style_all(list);
+    lv_obj_set_width(list, LV_PCT(100));
+    lv_obj_set_flex_grow(list, 1);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(
+        list,
+        LV_FLEX_ALIGN_SPACE_BETWEEN,
+        LV_FLEX_ALIGN_CENTER,
+        LV_FLEX_ALIGN_CENTER
+    );
+
+    /* 가로 간격 */
+    lv_obj_set_style_pad_column(list, 8, 0);
+
+    /* 4개 항목 생성 */
+    lv_obj_t * b0 = ch_make_item(ui, list, "On",    CH_F_ON);
+    lv_obj_t * b1 = ch_make_item(ui, list, "Delay", CH_F_DELAY);
+    lv_obj_t * b2 = ch_make_item(ui, list, "Block", CH_F_BLOCK);
+    lv_obj_t * b3 = ch_make_item(ui, list, "Trg",   CH_F_TRG);
+
+    lv_obj_add_event_cb(b0, ch_item_event_cb, LV_EVENT_ALL, ui);
+    lv_obj_add_event_cb(b1, ch_item_event_cb, LV_EVENT_ALL, ui);
+    lv_obj_add_event_cb(b2, ch_item_event_cb, LV_EVENT_ALL, ui);
+    lv_obj_add_event_cb(b3, ch_item_event_cb, LV_EVENT_ALL, ui);
+
+    /* ===== CLOSE 버튼 ===== */
+    lv_obj_t * btn_close = lv_btn_create(ui->CH_panel);
+    ui->CH_btn_close = btn_close;
+    lv_obj_set_size(btn_close, LV_PCT(100), 34);
+
+    lv_obj_set_style_bg_color(btn_close, lv_color_hex(0x1C2B34), 0);
+    lv_obj_set_style_bg_opa(btn_close, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(btn_close, 6, 0);
+    lv_obj_set_style_border_width(btn_close, 1, 0);
+    lv_obj_set_style_border_color(btn_close, lv_color_hex(0x2DE0C7), 0);
+
+    lv_obj_add_event_cb(btn_close, CHPannel_close_btn_cb, LV_EVENT_CLICKED, ui);
+
+    lv_obj_t * lbl = lv_label_create(btn_close);
+    lv_label_set_text(lbl, "CLOSE");
+    lv_obj_center(lbl);
+
+    /* ===== 모달 전용 그룹으로 전환 (포커스가 패널 밖으로 못 나감) ===== */
+    ui->ch_grp_prev = s_group;              /* 기존 그룹 기억 */
+    ui->ch_grp = lv_group_create();         /* 모달 그룹 */
+    lv_group_set_wrap(ui->ch_grp, true);
+    lv_group_set_editing(ui->ch_grp, false);
+
+    /* indev를 모달 그룹에 연결 (프로젝트에 있는 getter 사용) */
+    lv_indev_t * enc = lv_port_indev_get_encoder();
+    lv_indev_t * kp  = lv_port_indev_get_keypad();
+    if(enc) lv_indev_set_group(enc, ui->ch_grp);
+    if(kp)  lv_indev_set_group(kp,  ui->ch_grp);
+
+    /* 포커스 대상들 등록 */
+    lv_group_add_obj(ui->ch_grp, b0);
+    lv_group_add_obj(ui->ch_grp, b1);
+    lv_group_add_obj(ui->ch_grp, b2);
+    lv_group_add_obj(ui->ch_grp, b3);
+    lv_group_add_obj(ui->ch_grp, btn_close);
+
+    lv_group_focus_obj(b0); /* 첫 항목에 포커스 */
+
+    /* 표시 갱신 */
+    ch_panel_refresh(ui);
+
+    /* ===== 모달 그룹 전환 (enc 포인터로) ===== */
+
+    if(enc) lv_indev_set_group(enc, ui->ch_grp);
+	if(kp)  lv_indev_set_group(kp,  ui->ch_grp);
+
+    /* 현재 기본 그룹(전역 s_group)을 백업 */
+    ui->ch_grp_prev = s_group;
+
+    /* 모달 그룹 생성 */
+    ui->ch_grp = lv_group_create();
+    lv_group_set_wrap(ui->ch_grp, true);
+    lv_group_set_editing(ui->ch_grp, false);
+
+    /* indev를 모달 그룹에 연결 → 포커스가 모달 안에서만 움직임 */
+    if(enc) lv_indev_set_group(enc, ui->ch_grp);
+    if(kp)  lv_indev_set_group(kp,  ui->ch_grp);
+
+    /* 포커스 대상 등록(순서 중요) */
+    lv_group_add_obj(ui->ch_grp, b0);
+    lv_group_add_obj(ui->ch_grp, b1);
+    lv_group_add_obj(ui->ch_grp, b2);
+    lv_group_add_obj(ui->ch_grp, b3);
+    lv_group_add_obj(ui->ch_grp, btn_close);
+
+    /* 첫 포커스 */
+    lv_group_focus_obj(b0);
+
+
+    /* 편집 타이머 시작(50ms) */
+    if(!ui->ch_timer) {
+        ui->ch_timer = lv_timer_create(ch_edit_timer_cb, 50, ui);
+    } else {
+        lv_timer_resume(ui->ch_timer);
+    }
+    /* 표시 갱신 */
+   ch_panel_refresh(ui);
+}
+
+
+static void table_row_event_cb(lv_event_t * e)
+{
+    ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
+    lv_obj_t * row = lv_event_get_target(e);
+    lv_event_code_t code = lv_event_get_code(e);
+    if(!ui) return;
+
+    /* 엔코더 푸시가 "키"로 들어오는 경우 (권장) */
+    if(code == LV_EVENT_FOCUSED || code == LV_EVENT_CLICKED || code == LV_EVENT_KEY) {
+            for(uint16_t r=0; r<ui->ch_count; r++){
+            if(ui->tbl_row[r] == row){
+                ui->sel_row = r;
+                break;
+            }
+        }
+    }
+
+
+    /* 엔코더 ENTER로 모달 열기 */
+   if(code == LV_EVENT_KEY) {
+	   uint32_t key = lv_event_get_key(e);
+	   if(key == LV_KEY_ENTER) {
+		   CH_open(ui);
+	   }
+	   return;
+   }
+
+   /* 클릭으로 모달 열기 */
+   if(code == LV_EVENT_CLICKED) {
+        uint32_t key = lv_event_get_key(e);
+	    if(key == LV_KEY_ENTER) {
+		   CH_open(ui);
+	   }
+	    return;
+   }
+}
+
+
 
 /* helper */
 static lv_obj_t * make_tag(lv_obj_t * parent, const char * txt, bool bad)
@@ -188,7 +575,7 @@ static lv_obj_t * make_btn(lv_obj_t * parent, const char * title, bool primary)
 }
 
 /* ===== Table / Grid (CH x 5 columns) ===== */
-#define TBL_COLS 5
+
 
 static lv_obj_t * table_cell_label(lv_obj_t * parent, const char * txt, lv_color_t col, lv_text_align_t align, lv_coord_t w)
 {
@@ -211,13 +598,7 @@ static lv_obj_t * table_cell_btn(lv_obj_t * parent, const char * txt, lv_text_al
     lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_opa(btn, LV_OPA_TRANSP, 0);
     /* Keep table cells purely as display containers (no focus/key navigation). */
-    lv_obj_add_style(btn, &st_btn_focus, LV_STATE_FOCUSED);
-	lv_obj_add_flag(btn, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
-	/* (클릭 가능은 기본이므로 굳이 flag 추가 안 해도 됨) */
-
-	/* 포커스가 보이게 배경도 약간 */
-	lv_obj_set_style_bg_color(btn, lv_color_hex(0x0F2430), LV_STATE_FOCUSED);
-	lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_FOCUSED);
+    lv_obj_clear_flag(btn, LV_OBJ_FLAG_CLICKABLE);
 
     lv_obj_t * lbl = lv_label_create(btn);
     lv_label_set_text(lbl, txt);
@@ -236,7 +617,7 @@ static lv_obj_t * table_btn_label(lv_obj_t * btn)
 
 /* (table focus/key editing intentionally removed) */
 
-static void table_format_cell(ui_strobe_t * ui, uint16_t r, uint16_t c)
+void table_format_cell(ui_strobe_t * ui, uint16_t r, uint16_t c)
 {
     if(!ui || !ui->tbl_cell_lbl || r>=ui->ch_count || c>=TBL_COLS) return;
     lv_obj_t * lbl = ui->tbl_cell_lbl[r][c];
@@ -286,6 +667,7 @@ static void table_free(ui_strobe_t * ui)
     }
 }
 
+//CH채널 테이블 만드는 부분
 static void table_build(ui_strobe_t * ui, lv_obj_t * parent)
 {
     if(!ui || !parent) return;
@@ -302,7 +684,7 @@ static void table_build(ui_strobe_t * ui, lv_obj_t * parent)
     ui->tbl_hdr = lv_obj_create(parent);
     lv_obj_remove_style_all(ui->tbl_hdr);
     lv_obj_set_width(ui->tbl_hdr, LV_PCT(100));
-    lv_obj_set_height(ui->tbl_hdr, 26);
+    lv_obj_set_height(ui->tbl_hdr, 20);
     lv_obj_set_style_bg_opa(ui->tbl_hdr, LV_OPA_TRANSP, 0);
     lv_obj_set_style_pad_column(ui->tbl_hdr, 6, 0);
     lv_obj_set_flex_flow(ui->tbl_hdr, LV_FLEX_FLOW_ROW);
@@ -349,20 +731,24 @@ static void table_build(ui_strobe_t * ui, lv_obj_t * parent)
         lv_obj_remove_style_all(row);
         lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_set_width(row, LV_PCT(100));
-        lv_obj_set_height(row, 26);
+        lv_obj_set_height(row, 24);
         lv_obj_set_style_pad_column(row, 6, 0);
+        lv_obj_set_style_margin_top(row, 2, 0);
+        lv_obj_set_style_pad_left(row, 6, 0);
+        lv_obj_set_style_pad_right(row, 6, 0);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
 
         /* add: store row + make it focusable by encoder */
 		ui->tbl_row[r] = row;
-		lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+		// lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
 		lv_obj_add_flag(row, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+
+		if(s_group) lv_group_add_obj(s_group, row);
+		lv_obj_add_event_cb(row, table_row_event_cb, LV_EVENT_ALL, ui);
 
 		/*add: row focus highlight */
 		lv_obj_add_style(row, &st_row, 0);
 		lv_obj_add_style(row, &st_row_focus, LV_STATE_FOCUSED);
-		lv_obj_add_event_cb(row, row_event_cb, LV_EVENT_KEY | LV_EVENT_CLICKED, ui);
-
 
         /* Create 5 cells */
         for(uint16_t c=0; c<TBL_COLS; c++){
@@ -374,10 +760,6 @@ static void table_build(ui_strobe_t * ui, lv_obj_t * parent)
 
             ui->tbl_cell_btn[r][c] = btn;
             ui->tbl_cell_lbl[r][c] = lbl;
-
-            /*셀 r,c 저장 + 클릭 콜백 등록 (엔코더 PUSH=CLICKED) */
-            lv_obj_set_user_data(btn, (void *)(uintptr_t)((r << 8) | (c & 0xFF)));
-            lv_obj_add_event_cb(btn, table_cell_clicked_cb, LV_EVENT_CLICKED, ui);
 
             table_format_cell(ui, r, c);
         }
@@ -391,15 +773,11 @@ static void encoder_group_rebuild(ui_strobe_t * ui, lv_group_t * g)
     lv_group_remove_all_objs(g);
 
     /*  1) table rows first: encoder rotate => row-by-row focus */
-    if(ui->tbl_cell_btn) {
-		for(uint16_t r=0; r<ui->ch_count; r++) {
-			for(uint16_t c=0; c<TBL_COLS; c++) {
-				if(ui->tbl_cell_btn[r][c]) lv_group_add_obj(g, ui->tbl_cell_btn[r][c]);
-			}
+	if(ui->tbl_row){
+		for(uint16_t r = 0; r < ui->ch_count; r++){
+			if(ui->tbl_row[r]) lv_group_add_obj(g, ui->tbl_row[r]);
 		}
-		/* 첫 포커스 위치 (예: CH1, 첫 데이터 컬럼) */
-		if(ui->tbl_cell_btn[0][1]) lv_group_focus_obj(ui->tbl_cell_btn[0][1]);
-		else if(ui->tbl_cell_btn[0][0]) lv_group_focus_obj(ui->tbl_cell_btn[0][0]);
+		if(ui->tbl_row[0]) lv_group_focus_obj(ui->tbl_row[0]);
 	}
 
 	/*2) keep footer buttons in group too (optional, but safe) */
@@ -408,6 +786,7 @@ static void encoder_group_rebuild(ui_strobe_t * ui, lv_group_t * g)
 	if(ui->btn_save)  lv_group_add_obj(g, ui->btn_save);
 	if(ui->btn_load)  lv_group_add_obj(g, ui->btn_load);
 }
+
 ui_strobe_t * widgets_create_strobe_screen(void)
 {
     styles_init();
@@ -468,7 +847,6 @@ ui_strobe_t * widgets_create_strobe_screen(void)
     /* ==== p_grid 내부 ==== */
     ui->ch_count = 16; /* default, can be changed later */
     table_build(ui, p_grid);
-
 
     /* ==== p_info 내부 ==== */
     lv_obj_set_flex_flow(p_info, LV_FLEX_FLOW_COLUMN);
@@ -570,7 +948,6 @@ ui_strobe_t * widgets_create_strobe_screen(void)
     return ui;
 }
 
-
 void widgets_bind_encoder(ui_strobe_t * ui, lv_indev_t * indev_encoder)
 {
     if (!ui) return;
@@ -594,8 +971,6 @@ void widgets_bind_encoder(ui_strobe_t * ui, lv_indev_t * indev_encoder)
 
     /* Table key/edit handling removed: keep encoder group in normal navigation. */
 }
-
-
 
 void widgets_table_set_channel_count(ui_strobe_t * ui, uint16_t new_count)
 {
@@ -624,89 +999,3 @@ void widgets_table_set_cell(ui_strobe_t * ui, uint16_t ch0, uint16_t col, const 
     if(!ui->tbl_cell_lbl[ch0][col]) return;
     lv_label_set_text(ui->tbl_cell_lbl[ch0][col], txt);
 }
-
-static void ui_open_blank_screen(ui_strobe_t * ui)
-{
-    if(!ui) return;
-
-    /* create once */
-    if(!ui->scr_blank) {
-        ui->scr_blank = lv_obj_create(NULL);
-        lv_obj_remove_style_all(ui->scr_blank);
-        lv_obj_set_size(ui->scr_blank, LV_PCT(100), LV_PCT(100));
-        lv_obj_set_style_bg_color(ui->scr_blank, lv_color_hex(0x070C11), 0);
-        lv_obj_set_style_bg_opa(ui->scr_blank, LV_OPA_COVER, 0);
-
-        /* focus catcher (invisible full screen object) */
-        ui->blank_focus = lv_obj_create(ui->scr_blank);
-        lv_obj_remove_style_all(ui->blank_focus);
-        lv_obj_set_size(ui->blank_focus, LV_PCT(100), LV_PCT(100));
-        lv_obj_add_flag(ui->blank_focus, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(ui->blank_focus, blank_focus_event_cb,
-                            LV_EVENT_KEY | LV_EVENT_CLICKED, ui);
-    }
-
-    /* load blank screen */
-    lv_scr_load(ui->scr_blank);
-
-    /* group: keep only blank_focus so encoder press works on blank screen */
-    if(s_group) {
-        lv_group_remove_all_objs(s_group);
-        lv_group_add_obj(s_group, ui->blank_focus);
-        lv_group_focus_obj(ui->blank_focus);
-    }
-}
-
-static void ui_close_blank_screen(ui_strobe_t * ui)
-{
-    if(!ui) return;
-
-    /* return to main screen */
-    lv_scr_load(ui->scr);
-
-    /* restore group objects (rows + footer buttons) */
-    if(s_group) {
-        encoder_group_rebuild(ui, s_group);
-    }
-}
-
-static void row_event_cb(lv_event_t * e)
-{
-    ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
-    lv_event_code_t code = lv_event_get_code(e);
-    if(!ui) return;
-
-    if(code == LV_EVENT_CLICKED) {
-        /* encoder press can arrive here depending on indev */
-        ui_open_blank_screen(ui);
-        return;
-    }
-
-    if(code == LV_EVENT_KEY) {
-        uint32_t key = lv_event_get_key(e);
-        if(key == LV_KEY_ENTER) {
-            ui_open_blank_screen(ui);
-        }
-    }
-}
-
-static void blank_focus_event_cb(lv_event_t * e)
-{
-    ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
-    lv_event_code_t code = lv_event_get_code(e);
-    if(!ui) return;
-
-    if(code == LV_EVENT_CLICKED) {
-        /* press again => back */
-        ui_close_blank_screen(ui);
-        return;
-    }
-
-    if(code == LV_EVENT_KEY) {
-        uint32_t key = lv_event_get_key(e);
-        if(key == LV_KEY_ENTER || key == LV_KEY_ESC) {
-            ui_close_blank_screen(ui);
-        }
-    }
-}
-
