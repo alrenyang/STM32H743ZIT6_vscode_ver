@@ -28,12 +28,6 @@ typedef enum {
 #define BLOCK_MIN   0
 #define BLOCK_MAX   9999
 
-typedef struct {
-    uint16_t on;     /* us (e.g. 1~1000) */
-    uint16_t delay;  /* us (e.g. 0~10000) */
-    uint16_t block;  /* us (e.g. 0~10000) */
-    char     trg;    /* 'F' / 'R' / 'B' */
-} ch_data_t;
 
 typedef struct {
     lv_obj_t * scr;
@@ -74,7 +68,7 @@ typedef struct {
     lv_obj_t *** tbl_cell_lbl; /* [ch_count][5] */
 
     uint16_t   ch_count;       /* current channel count */
-    ch_data_t * ch_data;       /* array length ch_count */
+    // ch_data_t * ch_data;       /* array length ch_count */
 
     /* modal group */
     lv_group_t * ch_grp_prev;

@@ -4,12 +4,27 @@
 #include "lvgl.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include "data_it.h"
 /* Encoder focus group (footer buttons only).
  * Table cells are intentionally NOT focusable and do NOT handle LV_EVENT_KEY.
  */
+#define CH_COUNT 16 
+
+/* ================= 채널/ROW 전역 ================= */
+typedef struct {
+    lv_obj_t *row;        // row container
+    lv_obj_t *lbl_ch;
+    lv_obj_t *lbl_on;
+    lv_obj_t *lbl_delay;
+    lv_obj_t *lbl_block;
+    lv_obj_t *lbl_trg;
+} row_ui_t;
+
+static row_ui_t g_row[CH_COUNT];
+static uint16_t g_row_index[CH_COUNT];
+static uint16_t  g_sel_row = 0;
+
 static lv_group_t * s_group = NULL;
-
-
 
 /* ===== 480x272 fixed layout ===== */
 #define LCD_W 480
@@ -43,6 +58,9 @@ static inline int DISP_H(void) {
 #define C_GOLD    lv_color_hex(0xD7B36A)
 #define C_RED     lv_color_hex(0xFF4D4D)
 
+/* ================= 렌더 함수 ================= */
+static void row_render(uint16_t i);
+static void table_render_all(void);
 
 /* forward declarations */
 static int  ch_get_focused_field(ui_strobe_t * ui);
@@ -56,6 +74,63 @@ static lv_style_t st_scr, st_hdr, st_ftr, st_panel;
 static lv_style_t st_btn, st_btn_focus, st_btn_primary, st_tag, st_tag_bad;
 static lv_style_t st_row, st_row_focus;	//포커스 스타일
 static bool s_style_inited = false;
+
+/* ================= 렌더 함수 ================= */
+static void row_render(uint16_t i)
+{
+    char buf[32];
+
+    // CH 번호
+    snprintf(buf, sizeof(buf), "CH%02u", (unsigned)(i + 1));
+    lv_label_set_text(g_row[i].lbl_ch, buf);
+
+    // ON
+    snprintf(buf, sizeof(buf), "%u us", (unsigned)g_ch[i].on);
+    lv_label_set_text(g_row[i].lbl_on, buf);
+    // DELAY
+    snprintf(buf, sizeof(buf), "%u us", (unsigned)g_ch[i].delay);
+    lv_label_set_text(g_row[i].lbl_delay, buf);
+    // BLOCK
+    snprintf(buf, sizeof(buf), "%u us", (unsigned)g_ch[i].block);
+    lv_label_set_text(g_row[i].lbl_block, buf);
+    // TRG
+    snprintf(buf, sizeof(buf), "%c", g_ch[i].trg ? g_ch[i].trg : 'F');
+    lv_label_set_text(g_row[i].lbl_trg, buf);
+}
+
+static void table_render_all(void)
+{
+    for(uint16_t i = 0; i < CH_COUNT; i++) {
+        row_render(i);
+    }
+}
+
+/* ================= 이벤트 콜백 ================= */
+static void row_event_cb(lv_event_t * e)
+{
+    uint16_t *pidx = (uint16_t *)lv_event_get_user_data(e);
+    uint16_t idx   = pidx ? *pidx : 0;
+
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if(code == LV_EVENT_FOCUSED) {
+        g_sel_row = idx;
+        return;
+    }
+
+    if(code == LV_EVENT_KEY) {
+        uint32_t key = lv_event_get_key(e);
+        if(key == LV_KEY_ENTER) {
+            // CH_open(idx);
+            return;
+        }
+    }
+
+    if(code == LV_EVENT_CLICKED) {
+        g_sel_row = idx;
+        return;
+    }
+}
 
 static void styles_init(void)
 {
@@ -163,31 +238,40 @@ static void ch_edit_timer_cb(lv_timer_t * t)
 
     switch(field) {
     case 0: { /* ON */
-        int v = (int)ui->ch_data[r].on + dir;
+        // int v = (int)ui->ch_data[r].on + dir;
+        int v = (int)g_ch[r].on + dir;
         if(v < ON_MIN) v = ON_MIN;
         if(v > ON_MAX) v = ON_MAX;
-        ui->ch_data[r].on = (uint16_t)v;
+        // ui->ch_data[r].on = (uint16_t)v;
+        g_ch[r].on = (uint16_t)v;
     } break;
 
     case 1: { /* DELAY */
-        int v = (int)ui->ch_data[r].delay + dir;
+        // int v = (int)ui->ch_data[r].delay + dir;
+        int v = (int)g_ch[r].delay + dir;
         if(v < DELAY_MIN) v = DELAY_MIN;
         if(v > DELAY_MAX) v = DELAY_MAX;
-        ui->ch_data[r].delay = (uint16_t)v;
+        // ui->ch_data[r].delay = (uint16_t)v;
+        g_ch[r].delay = (uint16_t)v;
     } break;
 
     case 2: { /* BLOCK */
-        int v = (int)ui->ch_data[r].block + dir;
+        // int v = (int)ui->ch_data[r].block + dir;
+        int v = (int)g_ch[r].block + dir;
         if(v < BLOCK_MIN) v = BLOCK_MIN;
         if(v > BLOCK_MAX) v = BLOCK_MAX;
-        ui->ch_data[r].block = (uint16_t)v;
+        // ui->ch_data[r].block = (uint16_t)v;
+        g_ch[r].block = (uint16_t)v;
     } break;
 
     case 3: { /* TRG */
-        char t2 = ui->ch_data[r].trg;
+        // char t2 = ui->ch_data[r].trg;
+        // int v = (int)g_ch[r].on + dir;
+        char t2 = (char)g_ch[r].trg;
         if(dir > 0) t2 = (t2=='F')?'R':(t2=='R')?'B':'F';
         else        t2 = (t2=='F')?'B':(t2=='B')?'R':'F';
-        ui->ch_data[r].trg = t2;
+        // ui->ch_data[r].trg = t2;
+        g_ch[r].trg = t2;
     } break;
     }
 
@@ -223,10 +307,10 @@ static void ch_panel_refresh(ui_strobe_t * ui)
         lv_label_set_text(ui->ch_title, t);
     }
 
-    if(ui->ch_item_val[0]) { char s[24]; lv_snprintf(s,sizeof(s),"%u", (unsigned)ui->ch_data[r].on);    lv_label_set_text(ui->ch_item_val[0], s); }
-    if(ui->ch_item_val[1]) { char s[24]; lv_snprintf(s,sizeof(s),"%u", (unsigned)ui->ch_data[r].delay); lv_label_set_text(ui->ch_item_val[1], s); }
-    if(ui->ch_item_val[2]) { char s[24]; lv_snprintf(s,sizeof(s),"%u", (unsigned)ui->ch_data[r].block); lv_label_set_text(ui->ch_item_val[2], s); }
-    if(ui->ch_item_val[3]) { char s[8];  lv_snprintf(s,sizeof(s),"%c", ui->ch_data[r].trg);             lv_label_set_text(ui->ch_item_val[3], s); }
+    if(ui->ch_item_val[0]) { char s[24]; lv_snprintf(s,sizeof(s),"%u", (unsigned)g_ch[r].on);    lv_label_set_text(ui->ch_item_val[0], s); }
+    if(ui->ch_item_val[1]) { char s[24]; lv_snprintf(s,sizeof(s),"%u", (unsigned)g_ch[r].delay); lv_label_set_text(ui->ch_item_val[1], s); }
+    if(ui->ch_item_val[2]) { char s[24]; lv_snprintf(s,sizeof(s),"%u", (unsigned)g_ch[r].block); lv_label_set_text(ui->ch_item_val[2], s); }
+    if(ui->ch_item_val[3]) { char s[8];  lv_snprintf(s,sizeof(s),"%c", g_ch[r].trg);             lv_label_set_text(ui->ch_item_val[3], s); }
 }
 
 
@@ -331,12 +415,21 @@ static void CHPannel_mask_event_cb(lv_event_t * e)
     }
 }
 
+//채널값을 바꾸고 close버튼을 동작 시킴.
 static void CHPannel_close_btn_cb(lv_event_t * e)
 {
     ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
     if(!ui) return;
 
-    CHPannel_close(ui);
+    if(lv_event_get_code(e) == LV_EVENT_CLICKED) {
+
+        /* CLOSE 시점에 데이터 처리 */
+        data_it_on_close_apply(ui->sel_row);
+        // data_it_save_to_flash();   // 필요하면
+
+        /* 실제로 닫기 */
+        CHPannel_close(ui);
+    }
 }
 
 static void CH_open(ui_strobe_t * ui)
@@ -528,7 +621,6 @@ static void table_row_event_cb(lv_event_t * e)
         }
     }
 
-
     /* 엔코더 ENTER로 모달 열기 */
    if(code == LV_EVENT_KEY) {
 	   uint32_t key = lv_event_get_key(e);
@@ -622,9 +714,10 @@ void table_format_cell(ui_strobe_t * ui, uint16_t r, uint16_t c)
     if(!ui || !ui->tbl_cell_lbl || r>=ui->ch_count || c>=TBL_COLS) return;
     lv_obj_t * lbl = ui->tbl_cell_lbl[r][c];
     if(!lbl) return;
+    const ch_data_t * d = &g_ch[r];
 
-    char buf[16];
-    const ch_data_t * d = &ui->ch_data[r];
+    char buf[24];
+    // const ch_data_t * d = &ui->ch_data[r];
     switch(c){
     case 0: lv_snprintf(buf, sizeof(buf), "%u CH", (unsigned)(r+1)); break;
     case 1: lv_snprintf(buf, sizeof(buf), "%u us", (unsigned)d->on); break;
@@ -659,11 +752,6 @@ static void table_free(ui_strobe_t * ui)
     if(ui->tbl_row){
         lv_free(ui->tbl_row);
         ui->tbl_row = NULL;
-    }
-
-    if(ui->ch_data){
-        lv_free(ui->ch_data);
-        ui->ch_data = NULL;
     }
 }
 
@@ -709,7 +797,6 @@ static void table_build(ui_strobe_t * ui, lv_obj_t * parent)
     lv_obj_set_scrollbar_mode(ui->tbl_body, LV_SCROLLBAR_MODE_AUTO);
 
     /* allocate data + cell ptr arrays */
-    ui->ch_data = (ch_data_t *)lv_malloc(sizeof(ch_data_t) * ui->ch_count);
     ui->tbl_cell_btn = (lv_obj_t ***)lv_malloc(sizeof(lv_obj_t **) * ui->ch_count);
     ui->tbl_cell_lbl = (lv_obj_t ***)lv_malloc(sizeof(lv_obj_t **) * ui->ch_count);
 
@@ -719,10 +806,6 @@ static void table_build(ui_strobe_t * ui, lv_obj_t * parent)
 
     for(uint16_t r=0; r<ui->ch_count; r++){
         /* init defaults */
-        ui->ch_data[r].on = 1;
-        ui->ch_data[r].delay = 0;
-        ui->ch_data[r].block = 0;
-        ui->ch_data[r].trg = 'F';
 
         ui->tbl_cell_btn[r] = (lv_obj_t **)lv_malloc(sizeof(lv_obj_t *) * TBL_COLS);
         ui->tbl_cell_lbl[r] = (lv_obj_t **)lv_malloc(sizeof(lv_obj_t *) * TBL_COLS);
