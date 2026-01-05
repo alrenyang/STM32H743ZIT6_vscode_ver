@@ -11,6 +11,8 @@
 #define KEY_ACTIVE_LEVEL GPIO_PIN_RESET   // 보통 버튼은 Pull-up + 눌림=LOW가 많음
 #endif
 
+// volatile uint32_t g_hotkey = 0;
+
 typedef struct {
     GPIO_TypeDef *port;
     uint16_t pin;

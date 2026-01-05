@@ -2,6 +2,7 @@
 #define WIDGETS_H
 
 #include "lvgl.h"
+#include "src/misc/lv_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -79,6 +80,8 @@ typedef struct {
     lv_obj_t * ch_item_btn[4];
     lv_obj_t * ch_item_val[4];
     lv_obj_t * ch_title;     /* "CHxx" 표시용 라벨 */
+
+    lv_timer_t * hotkey_timer;  //글로벌 키 타이머
 
 } ui_strobe_t;
 

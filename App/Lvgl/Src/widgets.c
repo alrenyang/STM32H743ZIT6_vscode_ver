@@ -20,9 +20,9 @@ typedef struct {
     lv_obj_t *lbl_trg;
 } row_ui_t;
 
-static row_ui_t g_row[CH_COUNT];
-static uint16_t g_row_index[CH_COUNT];
-static uint16_t  g_sel_row = 0;
+// static row_ui_t g_row[CH_COUNT];
+// static uint16_t g_row_index[CH_COUNT];
+// static uint16_t  g_sel_row = 0;
 
 static lv_group_t * s_group = NULL;
 
@@ -59,14 +59,14 @@ static inline int DISP_H(void) {
 #define C_RED     lv_color_hex(0xFF4D4D)
 
 /* ================= 렌더 함수 ================= */
-static void row_render(uint16_t i);
-static void table_render_all(void);
+// static void row_render(uint16_t i);
+// static void table_render_all(void);
 
 /* forward declarations */
 static int  ch_get_focused_field(ui_strobe_t * ui);
 static void ch_panel_refresh(ui_strobe_t * ui);
 static void ch_edit_timer_cb(lv_timer_t * t);
-
+static void hotkey_poll_cb(lv_timer_t * t);
 
 
 /* ===== Styles ===== */
@@ -75,62 +75,62 @@ static lv_style_t st_btn, st_btn_focus, st_btn_primary, st_tag, st_tag_bad;
 static lv_style_t st_row, st_row_focus;	//포커스 스타일
 static bool s_style_inited = false;
 
-/* ================= 렌더 함수 ================= */
-static void row_render(uint16_t i)
-{
-    char buf[32];
+// /* ================= 렌더 함수 ================= */
+// static void row_render(uint16_t i)
+// {
+//     char buf[32];
 
-    // CH 번호
-    snprintf(buf, sizeof(buf), "CH%02u", (unsigned)(i + 1));
-    lv_label_set_text(g_row[i].lbl_ch, buf);
+//     // CH 번호
+//     snprintf(buf, sizeof(buf), "CH%02u", (unsigned)(i + 1));
+//     lv_label_set_text(g_row[i].lbl_ch, buf);
 
-    // ON
-    snprintf(buf, sizeof(buf), "%u us", (unsigned)g_ch[i].on);
-    lv_label_set_text(g_row[i].lbl_on, buf);
-    // DELAY
-    snprintf(buf, sizeof(buf), "%u us", (unsigned)g_ch[i].delay);
-    lv_label_set_text(g_row[i].lbl_delay, buf);
-    // BLOCK
-    snprintf(buf, sizeof(buf), "%u us", (unsigned)g_ch[i].block);
-    lv_label_set_text(g_row[i].lbl_block, buf);
-    // TRG
-    snprintf(buf, sizeof(buf), "%c", g_ch[i].trg ? g_ch[i].trg : 'F');
-    lv_label_set_text(g_row[i].lbl_trg, buf);
-}
+//     // ON
+//     snprintf(buf, sizeof(buf), "%u us", (unsigned)g_ch[i].on);
+//     lv_label_set_text(g_row[i].lbl_on, buf);
+//     // DELAY
+//     snprintf(buf, sizeof(buf), "%u us", (unsigned)g_ch[i].delay);
+//     lv_label_set_text(g_row[i].lbl_delay, buf);
+//     // BLOCK
+//     snprintf(buf, sizeof(buf), "%u us", (unsigned)g_ch[i].block);
+//     lv_label_set_text(g_row[i].lbl_block, buf);
+//     // TRG
+//     snprintf(buf, sizeof(buf), "%c", g_ch[i].trg ? g_ch[i].trg : 'F');
+//     lv_label_set_text(g_row[i].lbl_trg, buf);
+// }
 
-static void table_render_all(void)
-{
-    for(uint16_t i = 0; i < CH_COUNT; i++) {
-        row_render(i);
-    }
-}
+// static void table_render_all(void)
+// {
+//     for(uint16_t i = 0; i < CH_COUNT; i++) {
+//         row_render(i);
+//     }
+// }
 
-/* ================= 이벤트 콜백 ================= */
-static void row_event_cb(lv_event_t * e)
-{
-    uint16_t *pidx = (uint16_t *)lv_event_get_user_data(e);
-    uint16_t idx   = pidx ? *pidx : 0;
+// /* ================= 이벤트 콜백 ================= */
+// static void row_event_cb(lv_event_t * e)
+// {
+//     uint16_t *pidx = (uint16_t *)lv_event_get_user_data(e);
+//     uint16_t idx   = pidx ? *pidx : 0;
 
-    lv_event_code_t code = lv_event_get_code(e);
+//     lv_event_code_t code = lv_event_get_code(e);
 
-    if(code == LV_EVENT_FOCUSED) {
-        g_sel_row = idx;
-        return;
-    }
+//     if(code == LV_EVENT_FOCUSED) {
+//         g_sel_row = idx;
+//         return;
+//     }
 
-    if(code == LV_EVENT_KEY) {
-        uint32_t key = lv_event_get_key(e);
-        if(key == LV_KEY_ENTER) {
-            // CH_open(idx);
-            return;
-        }
-    }
+//     if(code == LV_EVENT_KEY) {
+//         uint32_t key = lv_event_get_key(e);
+//         if(key == LV_KEY_ENTER) {
+//             // CH_open(idx);
+//             return;
+//         }
+//     }
 
-    if(code == LV_EVENT_CLICKED) {
-        g_sel_row = idx;
-        return;
-    }
-}
+//     if(code == LV_EVENT_CLICKED) {
+//         g_sel_row = idx;
+//         return;
+//     }
+// }
 
 static void styles_init(void)
 {
@@ -218,6 +218,7 @@ static void styles_init(void)
     lv_style_set_pad_left(&st_row_focus, 1);
     lv_style_set_pad_right(&st_row_focus, 1);
 }
+
 
 static void ch_edit_timer_cb(lv_timer_t * t)
 {
@@ -593,15 +594,76 @@ static void CH_open(ui_strobe_t * ui)
     lv_group_focus_obj(b0);
 
 
-    /* 편집 타이머 시작(50ms) */
+    /* 편집 타이머 시작(1ms) */
     if(!ui->ch_timer) {
-        ui->ch_timer = lv_timer_create(ch_edit_timer_cb, 50, ui);
+        ui->ch_timer = lv_timer_create(ch_edit_timer_cb, 1, ui);
     } else {
         lv_timer_resume(ui->ch_timer);
     }
     /* 표시 갱신 */
    ch_panel_refresh(ui);
 }
+
+/*-----------------------------------------------------------*/
+// global 키 입력
+/*-----------------------------------------------------------*/
+static void hotkey_poll_cb(lv_timer_t * t)
+{
+    ui_strobe_t * ui = (ui_strobe_t *)lv_timer_get_user_data(t);
+    uint32_t k = g_hotkey;
+    if(!k) return;
+    g_hotkey = 0;
+
+    if(k == USE_KEY_UP) {
+        if(ui->CH_panel_mask) CHPannel_close(ui);
+        else {/* 원하는 전역 동작 */
+            printf("test");
+        }
+    }
+
+    if(k == USE_KEY_DOWN) {
+        if(ui->CH_panel_mask) CHPannel_close(ui);
+        else {/* 원하는 전역 동작 */
+            printf("test");
+        }
+    }
+
+    if(k == USE_KEY_SET) {
+        if(ui->CH_panel_mask) CHPannel_close(ui);
+        else {/* 원하는 전역 동작 */
+            printf("test");
+        }
+    }
+
+    if(k == USE_KEY_MODE) {
+        if(ui->CH_panel_mask) CHPannel_close(ui);
+        else {/* 원하는 전역 동작 */
+            printf("test");
+        }
+    }
+
+    if(k == USE_KEY_MEM) {
+        if(ui->CH_panel_mask) CHPannel_close(ui);
+        else {/* 원하는 전역 동작 */
+            printf("test");
+        }
+    }
+
+    if(k == USE_KEY_INTER) {
+        if(ui->CH_panel_mask) CHPannel_close(ui);
+        else {/* 원하는 전역 동작 */
+            printf("test");
+        }
+    }
+
+    if(k == USE_KEY_LOCK) {
+        if(ui->CH_panel_mask) CHPannel_close(ui);
+        else {/* 원하는 전역 동작 */
+            printf("test");
+        }
+    }
+}
+
 
 
 static void table_row_event_cb(lv_event_t * e)
@@ -652,6 +714,8 @@ static lv_obj_t * make_tag(lv_obj_t * parent, const char * txt, bool bad)
     return l;
 }
 
+
+//화면 하단의 버튼을 만드는 부분 //start stop save load
 static lv_obj_t * make_btn(lv_obj_t * parent, const char * title, bool primary)
 {
     lv_obj_t * btn = lv_btn_create(parent);
@@ -826,7 +890,9 @@ static void table_build(ui_strobe_t * ui, lv_obj_t * parent)
 		// lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
 		lv_obj_add_flag(row, LV_OBJ_FLAG_SCROLL_ON_FOCUS);
 
-		if(s_group) lv_group_add_obj(s_group, row);
+        lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE);
+
+		// if(s_group) lv_group_add_obj(s_group, row);
 		lv_obj_add_event_cb(row, table_row_event_cb, LV_EVENT_ALL, ui);
 
 		/*add: row focus highlight */
@@ -913,7 +979,11 @@ ui_strobe_t * widgets_create_strobe_screen(void)
     lv_obj_set_flex_flow(ui->body, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(ui->body, GAP, 0);
 
+    // lv_obj_add_event_cb(ui->scr, global_key_cb, LV_EVENT_KEY, ui);
+
     /* ==== 좌: grid panel / 우: info panel ==== */
+    // grid : 채널
+    // info panel : 정보
     const int info_w = 120;                    // 우측 고정폭
     const int grid_w = w - (GAP*2) - GAP - info_w;  // 좌측 자동
 
@@ -1027,6 +1097,11 @@ ui_strobe_t * widgets_create_strobe_screen(void)
     lv_obj_move_foreground(ui->header);
     lv_obj_move_foreground(ui->footer);
 
+     /* ===============================
+     * Global hotkey poll timer
+     * =============================== */
+    ui->hotkey_timer = lv_timer_create(hotkey_poll_cb, 1, ui);
+
 
     return ui;
 }
@@ -1081,4 +1156,21 @@ void widgets_table_set_cell(ui_strobe_t * ui, uint16_t ch0, uint16_t col, const 
     if(col >= TBL_COLS) return;
     if(!ui->tbl_cell_lbl[ch0][col]) return;
     lv_label_set_text(ui->tbl_cell_lbl[ch0][col], txt);
+}
+
+void widgets_destroy_strobe_screen(ui_strobe_t * ui)
+{
+    if(!ui) return;
+
+    if(ui->hotkey_timer) {
+        lv_timer_del(ui->hotkey_timer);
+        ui->hotkey_timer = NULL;
+    }
+
+    if(ui->scr) {
+        lv_obj_del(ui->scr);
+        ui->scr = NULL;
+    }
+
+    lv_free(ui);
 }

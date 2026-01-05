@@ -30,7 +30,15 @@ extern "C" {
 /**********************
  *      TYPEDEFS
  **********************/
-
+typedef enum {
+    USE_KEY_MODE     = 1,  /*0x11*/
+    USE_KEY_SET      = 2,  /*0x12*/
+    USE_KEY_INTER    = 3,  /*0x13*/
+    USE_KEY_MEM      = 4,  /*0x14*/
+    USE_KEY_UP       = 5,  /*0x1B*/
+    USE_KEY_DOWN     = 6, /*0x7F*/
+    USE_KEY_LOCK     = 7, /*0x7F*/
+}user_key_map;
 /**********************
  * GLOBAL PROTOTYPES
  **********************/

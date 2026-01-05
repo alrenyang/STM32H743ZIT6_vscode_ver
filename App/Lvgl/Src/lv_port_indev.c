@@ -60,7 +60,7 @@ static const lv_point_t s_btn_points[] = {
 #define HW_BTN_COUNT  (sizeof(s_btn_points)/sizeof(s_btn_points[0]))
 
 static uint32_t s_last_key = 0;
-
+volatile uint32_t g_hotkey = 0;
 /**********************
  *  GETTERS
  **********************/
@@ -154,29 +154,50 @@ static void encoder_read(lv_indev_t * indev, lv_indev_data_t * data)
                                              : LV_INDEV_STATE_RELEASED;
 }
 
-static uint32_t map_key_to_lv(KeyId_t id)
-{
-    switch (id) {
-    case KEY_LOCAL:  return LV_KEY_ENTER;	//로터리푸쉬키입력
-    case KEY_REMOTE: return LV_KEY_DOWN;
-
-    case KEY_DATA0:  return LV_KEY_BACKSPACE;
-    case KEY_DATA1:  return LV_KEY_RIGHT;
-    case KEY_DATA2:  return LV_KEY_UP;
-    case KEY_DATA3:  return LV_KEY_ESC;
-    case KEY_DATA4:  return LV_KEY_HOME;
-
-    default:         return 0;
-    }
-}
-
-static uint32_t map_hw_to_special(KeyId_t id)
+static user_key_map map_keyid_to_user(KeyId_t id)
 {
     switch(id) {
-    case KEY_DATA4:  return SPK_OPEN_HIDDEN_MENU;  // 예시
-    default:         return 0;
+    case KEY_LOCAL:   return USE_KEY_UP;
+    case KEY_REMOTE:  return USE_KEY_DOWN;
+
+    case KEY_DATA0:   return USE_KEY_SET;
+    case KEY_DATA1:   return USE_KEY_MODE;
+    case KEY_DATA2:   return USE_KEY_MEM;
+    case KEY_DATA3:   return USE_KEY_LOCK;
+    case KEY_DATA4:   return USE_KEY_INTER;
+
+    default:          return 0;
     }
 }
+
+static uint32_t map_key_to_lv(KeyId_t id)
+{
+    // switch (id) {
+    // case KEY_LOCAL:  return LV_KEY_ENTER;	//로터리푸쉬키입력
+    // case KEY_REMOTE: return LV_KEY_DOWN;
+
+    // case KEY_DATA0:  return LV_KEY_BACKSPACE;
+    // case KEY_DATA1:  return LV_KEY_RIGHT;
+    // case KEY_DATA2:  return LV_KEY_UP;
+    // case KEY_DATA3:  return LV_KEY_ESC;
+    // case KEY_DATA4:  return LV_KEY_HOME;
+
+    // default:         return 0;
+    // }
+//     user_key_map uk = map_keyid_to_user(id);
+//     return user_key_to_lv(uk);
+    return 0;
+}
+
+
+
+// static uint32_t map_hw_to_special(KeyId_t id)
+// {
+//     switch(id) {
+//     case KEY_DATA4:  return SPK_OPEN_HIDDEN_MENU;  // 예시
+//     default:         return 0;
+//     }
+// }
 
 static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
 {
@@ -195,9 +216,14 @@ static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
 
         /* keypad는 DOWN을 pressed로*/
         if (ev.type == KEYEV_DOWN) {
-            uint32_t k = map_key_to_lv(ev.id);
-            if(k == 0) k = map_key_to_lv(ev.id);
+            uint32_t k = map_keyid_to_user(ev.id);
+            if(k == 0) k = map_keyid_to_user(ev.id);
             if (k != 0) {
+                if (k == USE_KEY_UP || k == USE_KEY_DOWN || k == USE_KEY_SET || k == USE_KEY_MODE || 
+                    k == USE_KEY_MEM || k == USE_KEY_LOCK || k == USE_KEY_INTER ) 
+                {
+                    g_hotkey = k;
+                }
                 s_last_key = k;
                 data->key = (lv_key_t)k;
                 data->state = LV_INDEV_STATE_PRESSED;
@@ -207,8 +233,8 @@ static void keypad_read(lv_indev_t * indev, lv_indev_data_t * data)
 
         /* UP 시점에 release */
         if (ev.type == KEYEV_UP) {
-            uint32_t k = map_key_to_lv(ev.id);
-            if(k == 0) k = map_key_to_lv(ev.id);
+            uint32_t k = map_keyid_to_user(ev.id);
+            if(k == 0) k = map_keyid_to_user(ev.id);
             if (k != 0) {
                 s_last_key = k;
                 data->key = (lv_key_t)k;

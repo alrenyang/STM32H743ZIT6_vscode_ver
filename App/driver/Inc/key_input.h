@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+extern volatile uint32_t g_hotkey;
+
 typedef enum {
     KEY_DATA0 = 0,
     KEY_DATA1,
