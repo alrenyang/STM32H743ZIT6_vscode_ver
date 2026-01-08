@@ -5,6 +5,27 @@
 
 #define CH_COUNT 16
 
+typedef enum{
+    interlock_1     = 1,   //interlock mode 1
+    interlock_2     = 2,   //interlock mode 2
+    interlock_4     = 4,   //interlock mode 4
+    interlock_8     = 8,   //interlock mode 8
+    interlock_16    = 16,   //interlock mode 16
+}interlock_t;
+
+typedef struct{
+    uint8_t gete_way_ip[4];
+    uint8_t user_ip[4];
+} tcpip_t;
+
+typedef struct{
+    uint8_t slot;
+} slot_t;
+
+typedef struct{
+    uint8_t repeat;
+} repeat_t;
+
 typedef struct {
     uint16_t on;
     uint16_t delay;
