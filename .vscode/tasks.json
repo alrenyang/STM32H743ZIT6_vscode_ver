@@ -3,27 +3,33 @@
 	"tasks": [
 		{
 			"type": "cmake",
-			"label": "CMake: 빌드",
-			"command": "build",
-			"targets": [
-				"all"
-			],
-			"preset": "Release",
-			"group": "build",
-			"problemMatcher": [],
-			"detail": "CMake 템플릿 빌드 작업"
-		},
-		{
-			"type": "cmake",
 			"label": "CMake: 다시 빌드 정리",
 			"command": "cleanRebuild",
 			"targets": [
 				"all"
 			],
-			"preset": "Release",
+			"preset": "Debug",
 			"group": "build",
 			"problemMatcher": [],
 			"detail": "CMake 템플릿 다시 빌드 정리 작업"
+		},
+		{
+			"label": "flash_down",
+			"type": "shell",
+			"command": "stm32_programmer_cli -c port=SWD -w build/Debug/stm32h743zit6.elf",
+			"problemMatcher": []
+		},
+		{
+			"type": "cmake",
+			"label": "CMake: 빌드",
+			"command": "build",
+			"targets": [
+				"all"
+			],
+			"preset": "Debug",
+			"group": "build",
+			"problemMatcher": [],
+			"detail": "CMake 템플릿 빌드 작업"
 		}
 	]
 }

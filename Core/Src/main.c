@@ -20,18 +20,36 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "lwip.h"
-#include "lvgl.h"
-#include "lv_conf.h"
-#include "src/lv_init.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include <stdbool.h>
+#include "tcp_ip.h"
+#include "lwip/tcp.h"
+#include "lwip/pbuf.h"
+#include "lcd.h"
+#include "../Middlewares/lvgl/lvgl.h"
+#include "lv_port_disp.h"
+#include "lv_port_indev.h"
+#include "com_define.h"
+#include "sdram.h"
+#include "widgets.h"
+#include "hw.h"
+#include <stdio.h>
+#include "user_def.h"
+#include "ax_uart2.h"
+#include "packet_task.h"
+#include "ax_mcu_if.h"
+#include "ax_eeprom.h"
+#include "reg_addr.h"
+#include "ax_eeprom_task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+uint16_t *FrameBuffer = (uint16_t *)LCD_FB_ADDR;
+extern struct netif gnetif;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -75,11 +93,81 @@ static void MX_LTDC_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
+uint8_t gete_way_ip[4] = {192,168,0,1};	//user set up
+uint8_t user_ip[4] = {192,168,0,50};
+uint16_t Port_No = 5001;
+uint32_t g_rs232_baud = 115200;
 
+volatile bool btcp_connect = false;
+
+uint8_t g_tcp_recv_buffer[TCP_RECV_BUF_SIZE];	//TCP로 데이터를 받는다...
+volatile uint32_t g_tcp_recv_len = 0;
+volatile bool g_tcp_new_data_flag = false;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define CH_DEFAULT_ON     9999
+#define CH_DEFAULT_DELAY  5555
+#define CH_DEFAULT_BLOCK  1111
+#define CH_DEFAULT_TRIG_MODE  0   /* 0:rising, 1:falling, 2:both */
+#define TRIG_DEFAULT_INTERLOCK 0   /* 0 : 1ch, 1 : 2chs, 2 : 4chs, 3 : 8chs, 4 : 16chs */
+#define SEQ_DEFAULT_REPEAT  1
+
+static void channel_con_set_default(st_channel_con * ch)
+{
+    if(!ch) return;
+    ch->delay     = CH_DEFAULT_DELAY;
+    ch->on        = CH_DEFAULT_ON;
+    ch->block     = CH_DEFAULT_BLOCK;
+    ch->trig_mode = CH_DEFAULT_TRIG_MODE;
+}
+
+/* trig 설정 기본값 */
+void trig_con_init_default(st_trig_con * t)
+{
+    if(!t) return;
+    memset(t, 0, sizeof(*t));
+
+    for(int i = 0; i < CH_MAX; i++){
+        channel_con_set_default(&t->ch_con[i]);
+    }
+    t->interlock = TRIG_DEFAULT_INTERLOCK;
+}
+
+void seq_con_init_default(st_seq_con * s)
+{
+    if(!s) return;
+    memset(s, 0, sizeof(*s));
+
+    for(int p = 0; p < PAGE_MAX; p++){
+        trig_con_init_default(&s->page_con[p]);
+        s->repeat_page[p] = SEQ_DEFAULT_REPEAT;
+    }
+
+    s->start_page = 0;
+    s->end_page   = (PAGE_MAX > 0) ? (PAGE_MAX - 1) : 0;
+}
+
+/* packet 기본값 */
+void rcv_packet_init_default(st_rcv_packet * pk)
+{
+    if(!pk) return;
+    memset(pk, 0, sizeof(*pk));
+
+    pk->state = PK_START;
+    pk->type  = PK_GET; 
+    pk->cmd_index  = 0;
+    pk->data_index = 0;
+}
+
+void default_value_init(void)
+{
+    trig_con_init_default(&g_trig_con);
+    seq_con_init_default(&g_seq_con);
+    rcv_packet_init_default(&g_rcv_packet);
+}
+
 
 /* USER CODE END 0 */
 
@@ -95,7 +183,7 @@ int main(void)
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
-  MPU_Config();
+  MPU_Config(); 
 
   /* Enable the CPU Cache */
 
@@ -131,6 +219,45 @@ int main(void)
   MX_LTDC_Init();
   /* USER CODE BEGIN 2 */
 
+  //LAN8742 RESET PIN
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_Delay(100);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, GPIO_PIN_SET);
+  HAL_Delay(500);
+
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);	//DISP Control
+  HAL_Delay(250); // Datasheet: Wait T2 (250ms min) after DISP High before turning on Backlight
+  HAL_GPIO_WritePin(GPIOA, LCD_BAK_Pin, GPIO_PIN_SET);	//LCD Backlight Enable
+
+  packet_init();
+  HAL_Delay(1000);
+
+  setvbuf(stdout, NULL, _IONBF, 0); // No buffering
+
+  printf("\r\n\r\n App Start 2025. 12. 10b \r\n");
+  uart2_puts("\r\n\r\n [Debug] App Start 2025. 12. 10b \r\n");
+
+//  HAL_UART_Receive_IT(&huart1, (uint8_t*) &rx1_data, 1);
+//  HAL_UART_Receive_IT(&huart2, (uint8_t*) &rx2_data, 1);
+  HAL_Delay(100);
+
+  // -----------------------------------------------------------------------------
+  // power on, eeprom 에서 데이터를 읽어옴.
+  // g_oper_mode =  0; //트리거모드
+  // g_oper_mode =  1; //시퀀스모드
+  // default_value_init(); //기본 값
+  // eeprom_save_sys();
+
+  // eeprom_save_facotry();
+
+  eeprom_load_sys();					// load sys data from eeprom
+  load_user_param(g_user_default);		// load trig_mode param from eeprom
+  eeprom_load_page_all();				// load sequence mode param from eeprom
+
+  mcu_write16(rSTROBE_EN, 0xffff);		// fpga write, strobe_enable
+  mcu_write16(rSTROBE_EN, 0xffff);
+  uart2_puts_16h("\r\n rSTROBE_EN : 0x", mcu_read16(rSTROBE_EN));
+
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -151,7 +278,7 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of MainTask */
-  osThreadDef(MainTask, StartDefaultTask, osPriorityNormal, 0, 256);
+  osThreadDef(MainTask, StartDefaultTask, osPriorityNormal, 0, 2048);
   MainTaskHandle = osThreadCreate(osThread(MainTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -189,25 +316,22 @@ void SystemClock_Config(void)
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
+
+  /** Macro to configure the PLL clock source
+  */
+  __HAL_RCC_PLL_PLLSOURCE_CONFIG(RCC_PLLSOURCE_HSE);
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 5;
-  RCC_OscInitStruct.PLL.PLLN = 192;
-  RCC_OscInitStruct.PLL.PLLP = 2;
-  RCC_OscInitStruct.PLL.PLLQ = 2;
-  RCC_OscInitStruct.PLL.PLLR = 2;
-  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1VCIRANGE_2;
-  RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
-  RCC_OscInitStruct.PLL.PLLFRACN = 0;
+  RCC_OscInitStruct.HSIState = RCC_HSI_DIV1;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -218,15 +342,15 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
                               |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.SYSCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV2;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -288,7 +412,7 @@ static void MX_I2C4_Init(void)
 
   /* USER CODE END I2C4_Init 1 */
   hi2c4.Instance = I2C4;
-  hi2c4.Init.Timing = 0x307075B1;
+  hi2c4.Init.Timing = 0x00707CBB;
   hi2c4.Init.OwnAddress1 = 0;
   hi2c4.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c4.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -366,7 +490,7 @@ static void MX_LTDC_Init(void)
   pLayerCfg.Alpha0 = 255;
   pLayerCfg.BlendingFactor1 = LTDC_BLENDING_FACTOR1_CA;
   pLayerCfg.BlendingFactor2 = LTDC_BLENDING_FACTOR2_CA;
-  pLayerCfg.FBStartAdress = 0xC0000000;
+  pLayerCfg.FBStartAdress = LCD_ST_ADDR;
   pLayerCfg.ImageWidth = 480;
   pLayerCfg.ImageHeight = 272;
   pLayerCfg.Backcolor.Blue = 0;
@@ -521,7 +645,89 @@ static void MX_FMC_Init(void)
   }
 
   /* USER CODE BEGIN FMC_Init 2 */
+static FMC_SDRAM_CommandTypeDef Command;
 
+
+  Command.CommandMode            = FMC_SDRAM_CMD_CLK_ENABLE;
+  Command.CommandTarget          = FMC_SDRAM_CMD_TARGET_BANK1;
+  Command.AutoRefreshNumber      = 1;
+  Command.ModeRegisterDefinition = 0;
+
+  if(HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT) != HAL_OK)
+  {
+	 printf("[  ] sdram step 1 fail\n");
+	 Error_Handler( );
+  }
+
+//  osDelay(1);
+  HAL_Delay(1);
+
+
+  Command.CommandMode            = FMC_SDRAM_CMD_PALL;
+  Command.CommandTarget          = FMC_SDRAM_CMD_TARGET_BANK1;
+  Command.AutoRefreshNumber      = 1;
+  Command.ModeRegisterDefinition = 0;
+  if(HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT) != HAL_OK)
+  {
+	printf("[  ] sdram step 3 fail\n");
+	Error_Handler( );
+  }
+
+  Command.CommandMode            = FMC_SDRAM_CMD_AUTOREFRESH_MODE;
+  Command.CommandTarget          = FMC_SDRAM_CMD_TARGET_BANK1;
+  Command.AutoRefreshNumber      = 8;
+  Command.ModeRegisterDefinition = 0;
+  if(HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT) != HAL_OK)
+  {
+	printf("[  ] sdram step 4 fail\n");
+    Error_Handler( );
+  }
+
+  uint32_t mode_reg = 0;
+
+  mode_reg |= (2 << 0); // Burst Length = 4
+  mode_reg |= (0 << 3); // Burst Type
+                        //   0 : Sequential
+                        //   1 : Interleaved
+  mode_reg |= (2 << 4); // CAS Latency Mode
+                        //   2 :
+                        //   3 :
+  mode_reg |= (0 << 7); // Operation Mode
+  mode_reg |= (0 << 9); // Write Burst Mode
+                        //   0 : Programmed Burst Length
+                        //   1 : Single Location Access
+
+  Command.CommandMode            = FMC_SDRAM_CMD_LOAD_MODE;
+  Command.CommandTarget          = FMC_SDRAM_CMD_TARGET_BANK1;
+  Command.AutoRefreshNumber      = 1;
+  Command.ModeRegisterDefinition = mode_reg;
+  if(HAL_SDRAM_SendCommand(&hsdram1, &Command, SDRAM_TIMEOUT) != HAL_OK)
+  {
+	printf("[  ] sdram step 5 fail\n");
+	Error_Handler( );
+  }
+// Step 6: Set the refresh rate counter
+//
+// refresh rate = (COUNT + 1) * SDRAM clock freq (95Mhz)
+//
+// COUNT = (SDRAM refresh period/Number of rows) - 20
+//       = (64ms / 8192) - 20
+//       = 7.81us * 95 - 20 = 722
+  uint32_t fmc_hz   = FMC_GetKernelClock_Hz();
+  uint32_t sdclk_hz = fmc_hz / 2; // SDClockPeriod=2 이면 FMC_CLK/2
+
+  uint32_t refresh_count = SDRAM_RefreshCount_IS42S16400J(sdclk_hz);
+  refresh_count = (refresh_count * 130) / 100;
+
+  printf("FMC=%lu Hz, SDCLK=%lu Hz, refresh=%lu\r\n", (unsigned long)fmc_hz, (unsigned long)sdclk_hz, (unsigned long)refresh_count);
+
+  HAL_SDRAM_ProgramRefreshRate(&hsdram1, refresh_count);
+
+  if (HAL_SDRAM_ProgramRefreshRate(&hsdram1, refresh_count) != HAL_OK)
+  {
+	  printf("[  ] sdram step 5 fail\n");
+	  Error_Handler();
+  }
   /* USER CODE END FMC_Init 2 */
 }
 
@@ -538,23 +744,63 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
-  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOE, F_DATA0_Pin|F_DATA1_Pin|F_DATA2_Pin|F_DATA3_Pin
+                          |F_DATA4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, F_DATA5_Pin|F_DATA6_Pin|F_DATA7_Pin|GPIO_PIN_8
+                          |GPIO_PIN_12, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOF, F_DATA8_Pin|F_DATA9_Pin|F_DATA10_Pin|F_DATA11_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LCD_BAK_GPIO_Port, LCD_BAK_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8|GPIO_PIN_12, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, F_DATA12_Pin|F_DATA13_Pin|F_DATA14_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_12, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(F_DATA15_GPIO_Port, F_DATA15_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOG, F_CS_Pin|F_WR_Pin|F_RD_Pin|F_ALE_Pin
+                          |HEART_BEAT_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : F_DATA0_Pin F_DATA1_Pin F_DATA2_Pin F_DATA3_Pin
+                           F_DATA4_Pin */
+  GPIO_InitStruct.Pin = F_DATA0_Pin|F_DATA1_Pin|F_DATA2_Pin|F_DATA3_Pin
+                          |F_DATA4_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : F_DATA5_Pin F_DATA6_Pin F_DATA7_Pin PC8
+                           PC12 */
+  GPIO_InitStruct.Pin = F_DATA5_Pin|F_DATA6_Pin|F_DATA7_Pin|GPIO_PIN_8
+                          |GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : F_DATA8_Pin F_DATA9_Pin F_DATA10_Pin F_DATA11_Pin */
+  GPIO_InitStruct.Pin = F_DATA8_Pin|F_DATA9_Pin|F_DATA10_Pin|F_DATA11_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LCD_BAK_Pin */
   GPIO_InitStruct.Pin = LCD_BAK_Pin;
@@ -569,12 +815,28 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PC8 PC12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_12;
+  /*Configure GPIO pins : F_DATA12_Pin F_DATA13_Pin F_DATA14_Pin */
+  GPIO_InitStruct.Pin = F_DATA12_Pin|F_DATA13_Pin|F_DATA14_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : F_DATA15_Pin */
+  GPIO_InitStruct.Pin = F_DATA15_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(F_DATA15_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : F_CS_Pin F_WR_Pin F_RD_Pin F_ALE_Pin
+                           HEART_BEAT_Pin */
+  GPIO_InitStruct.Pin = F_CS_Pin|F_WR_Pin|F_RD_Pin|F_ALE_Pin
+                          |HEART_BEAT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
   /*Configure GPIO pins : KEY_DATA0_Pin KEY_DATA1_Pin KEY_DATA2_Pin */
   GPIO_InitStruct.Pin = KEY_DATA0_Pin|KEY_DATA1_Pin|KEY_DATA2_Pin;
@@ -587,13 +849,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PG12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_12;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
   /*AnalogSwitch Config */
   HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PA0, SYSCFG_SWITCH_PA0_CLOSE);
@@ -619,12 +874,62 @@ void StartDefaultTask(void const * argument)
   /* init code for LWIP */
   MX_LWIP_Init();
   /* USER CODE BEGIN 5 */
-  printf("test %d",LV_COLOR_DEPTH);
+  hwInit();
+  tcp_ip_config(&gnetif, user_ip, gete_way_ip);
+  printf("Waiting for IP...\n");
+
+  /* Wait until IP acquired */
+  while (ip4_addr_isany_val(*netif_ip4_addr(&gnetif))) {
+		osDelay(200);
+  }
+  printf("IP Ready: %s\n", ip4addr_ntoa(netif_ip4_addr(&gnetif)));
+
+  osDelay(200);
+
+  LOCK_TCPIP_CORE();
+  btcp_connect = tcp_server_init(Port_No);
+  UNLOCK_TCPIP_CORE();
+
+  LCD_ShowLogo();
+  SCB_CleanDCache_by_Addr((uint32_t *)FrameBuffer, LCD_WIDTH * LCD_HEIGHT * 2); // 2 bytes per pixel
+  osDelay(2000);
+
+  lv_init();	//lvgl init
+  lv_port_disp_init();	//display init
+  lv_port_indev_init();	//input device init
+
+  ui_strobe_t *ui = widgets_create_strobe_screen();
+  lv_scr_load(ui->scr);
+
+  lv_indev_t * enc = lv_port_indev_get_encoder();
+  widgets_bind_encoder(ui, enc);
+
+  uint32_t pre_time;
+  pre_time = HAL_GetTick();
 
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    if(HAL_GetTick() - pre_time >= 500)
+    {
+      pre_time = HAL_GetTick();
+      HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_12);
+
+      if(g_tcp_new_data_flag)
+      {
+        printf("Received new data: %.*s\n", (int)g_tcp_recv_len, g_tcp_recv_buffer);
+        g_tcp_new_data_flag = false;
+
+        char *response = "Ok\n";
+        tcp_send_data((uint8_t*)response, strlen(response));
+      }
+    }
+    
+    lv_tick_inc(1);
+    lv_port_indev_poll_5ms();	//키 및 로터리 스캔
+    lv_timer_handler();
+
+    // osDelay(1);
   }
   /* USER CODE END 5 */
 }

@@ -45,6 +45,9 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 #하위 폴더의 모든 *.c를 포함 한다.
 file(GLOB_RECURSE SRC_FILES_RECURSE CONFIGURE_DEPENDS
     Middlewares/lvgl/*.c
+    App/driver/Src/*.c
+    App/Lvgl/Src/*.c
+
     # src/ap/*.cpp
     # src/ap/*.c
     # src/bsp/*.s
@@ -92,6 +95,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     Middlewares/lvgl
     Middlewares/
+    App/Lvgl/Inc/
+    App/driver/Inc/
 )
 
 # Add project symbols (macros)
@@ -107,6 +112,9 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     -Wno-expansion-to-defined
     -Os
+    -Wl,-Map=firmware.map
+    -g3 -Og
+    -fno-omit-frame-pointer
 )
 
 # Add linked libraries
@@ -118,7 +126,11 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 
 #추가 설정
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "================ BUILD SUCCESS ================"
     COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+    COMMAND ${CMAKE_COMMAND} -E echo "HEX : ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex"
     COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
+    COMMAND ${CMAKE_COMMAND} -E echo "BIN : ${CMAKE_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin"
+    COMMAND ${CMAKE_COMMAND} -E echo "=============================================="
     COMMENT "Generating hex and bin files"
 )
