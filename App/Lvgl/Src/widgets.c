@@ -2,14 +2,11 @@
 // #include "lv_port_indev.h"
 #include "key_input.h"
 #include "lvgl.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 
 #include "com_widget.h"
 #include "mod_win.h"
 #include "ch_win.h"
-
+#include "set_win.h"
 
 /* Encoder focus group (footer buttons only).
  * Table cells are intentionally NOT focusable and do NOT handle LV_EVENT_KEY.
@@ -33,8 +30,8 @@ static lv_style_t st_btn, st_btn_focus, st_btn_primary, st_tag, st_tag_bad;
 // static lv_style_t st_row, st_row_focus;	//포커스 스타일
 static bool s_style_inited = false;
 
-extern uint32_t g_rs232_baud;
-extern uint8_t  user_ip[4];
+// extern uint32_t g_rs232_baud;
+// extern uint8_t  user_ip[4];
 
 
 static void styles_init(void)
@@ -125,6 +122,7 @@ static void styles_init(void)
     lv_style_set_pad_right(&g_st_row_focus, 1);
 }
 
+#if MODE_SET
 /*-----------------------------------------------------------*/
 // setting window callback함수
 /*-----------------------------------------------------------*/
@@ -191,7 +189,9 @@ static bool parse_octet(const char *s, uint8_t *out)
     *out = (uint8_t)v;
     return true;
 }
+#endif
 
+#if MODE_SET
 static void setting_apply_event_cb(lv_event_t * e)
 {
     ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
@@ -234,7 +234,9 @@ static void setting_close_event_cb(lv_event_t * e)
     /* 닫기 함수가 있다면 호출 */
     Setting_window_close(ui);
 }
+#endif
 
+#if MODE_SET
 /*-----------------------------------------------------------*/
 // SETTING mask click -> close
 /*-----------------------------------------------------------*/
@@ -247,7 +249,9 @@ static void Setting_mask_event_cb(lv_event_t * e)
 
     Setting_window_close(ui);
 }
+#endif
 
+#if MODE_SET
 /*-----------------------------------------------------------*/
 // setting window 모드키 누르면 팝업창 생성
 /*-----------------------------------------------------------*/
@@ -316,21 +320,15 @@ static void Setting_window_open(ui_strobe_t * ui)
     ui->dd_baud = lv_dropdown_create(row_baud);
     lv_dropdown_set_options(ui->dd_baud,
         "9600\n"
-        "19200\n"
-        "38400\n"
         "57600\n"
         "115200\n"
-        "230400"
     );
 
     switch(g_rs232_baud){
     case 9600:   lv_dropdown_set_selected(ui->dd_baud, 0); break;
-    case 19200:  lv_dropdown_set_selected(ui->dd_baud, 1); break;
-    case 38400:  lv_dropdown_set_selected(ui->dd_baud, 2); break;
-    case 57600:  lv_dropdown_set_selected(ui->dd_baud, 3); break;
-    case 115200: lv_dropdown_set_selected(ui->dd_baud, 4); break;
-    case 230400: lv_dropdown_set_selected(ui->dd_baud, 5); break;
-    default:     lv_dropdown_set_selected(ui->dd_baud, 4); break;
+    case 57600:  lv_dropdown_set_selected(ui->dd_baud, 1); break;
+    case 115200: lv_dropdown_set_selected(ui->dd_baud, 2); break;
+    default:     lv_dropdown_set_selected(ui->dd_baud, 2); break;
     }
 
     /* ===== Row: TCP/IP Address ===== */
@@ -413,7 +411,7 @@ static void Setting_window_open(ui_strobe_t * ui)
 
     lv_group_focus_obj(ui->dd_baud);
 }
-
+#endif
 
 /*-----------------------------------------------------------*/
 // global 키 입력

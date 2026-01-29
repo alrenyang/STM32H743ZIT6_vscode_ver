@@ -4,6 +4,9 @@
 #include "ax_eeprom_task.h"
 #include "ui_styles.h"
 #include "key_input.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 /* ===== Colors (macro) ===== */
 #define C_BG      lv_color_hex(0x070C11)
@@ -25,6 +28,8 @@
 
 extern const char * const mode_str_tbl[];
 extern lv_group_t * s_group;
+extern uint32_t g_rs232_baud;
+extern uint8_t  user_ip[4];
 
 
 // const char * mode_str_tbl[] = {

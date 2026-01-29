@@ -44,6 +44,7 @@
 #include "ax_eeprom.h"
 #include "reg_addr.h"
 #include "ax_eeprom_task.h"
+#include "com_widget.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

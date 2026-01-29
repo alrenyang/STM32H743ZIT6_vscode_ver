@@ -7,6 +7,9 @@ const char * const mode_str_tbl[] = {
     "MODE: ETHERNET"
 };
 
+
+
+
 /*기본 버튼 스타일 공통 적용*/
 lv_obj_t * mode_make_btn(lv_obj_t * parent, const char * txt)
 {

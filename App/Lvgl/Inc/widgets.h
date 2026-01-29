@@ -13,8 +13,9 @@ extern "C" {
 #define UI_MAX_CH 32
 #endif
 
-#define MODE_MODE 0
-#define MODE_CH  0
+// #define MODE_MODE 0
+// #define MODE_CH  0
+#define MODE_SET    0
 
 #define TBL_COLS 5
 
