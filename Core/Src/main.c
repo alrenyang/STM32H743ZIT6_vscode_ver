@@ -108,66 +108,6 @@ volatile bool g_tcp_new_data_flag = false;
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-#define CH_DEFAULT_ON     9999
-#define CH_DEFAULT_DELAY  5555
-#define CH_DEFAULT_BLOCK  1111
-#define CH_DEFAULT_TRIG_MODE  0   /* 0:rising, 1:falling, 2:both */
-#define TRIG_DEFAULT_INTERLOCK 0   /* 0 : 1ch, 1 : 2chs, 2 : 4chs, 3 : 8chs, 4 : 16chs */
-#define SEQ_DEFAULT_REPEAT  1
-
-static void channel_con_set_default(st_channel_con * ch)
-{
-    if(!ch) return;
-    ch->delay     = CH_DEFAULT_DELAY;
-    ch->on        = CH_DEFAULT_ON;
-    ch->block     = CH_DEFAULT_BLOCK;
-    ch->trig_mode = CH_DEFAULT_TRIG_MODE;
-}
-
-/* trig 설정 기본값 */
-void trig_con_init_default(st_trig_con * t)
-{
-    if(!t) return;
-    memset(t, 0, sizeof(*t));
-
-    for(int i = 0; i < CH_MAX; i++){
-        channel_con_set_default(&t->ch_con[i]);
-    }
-    t->interlock = TRIG_DEFAULT_INTERLOCK;
-}
-
-void seq_con_init_default(st_seq_con * s)
-{
-    if(!s) return;
-    memset(s, 0, sizeof(*s));
-
-    for(int p = 0; p < PAGE_MAX; p++){
-        trig_con_init_default(&s->page_con[p]);
-        s->repeat_page[p] = SEQ_DEFAULT_REPEAT;
-    }
-
-    s->start_page = 0;
-    s->end_page   = (PAGE_MAX > 0) ? (PAGE_MAX - 1) : 0;
-}
-
-/* packet 기본값 */
-void rcv_packet_init_default(st_rcv_packet * pk)
-{
-    if(!pk) return;
-    memset(pk, 0, sizeof(*pk));
-
-    pk->state = PK_START;
-    pk->type  = PK_GET; 
-    pk->cmd_index  = 0;
-    pk->data_index = 0;
-}
-
-void default_value_init(void)
-{
-    trig_con_init_default(&g_trig_con);
-    seq_con_init_default(&g_seq_con);
-    rcv_packet_init_default(&g_rcv_packet);
-}
 
 
 /* USER CODE END 0 */
@@ -249,7 +189,7 @@ int main(void)
   // default_value_init(); //기본 값
   // eeprom_save_sys();
 
-  // eeprom_save_facotry();
+  eeprom_save_facotry();
 
   eeprom_load_sys();					// load sys data from eeprom
   load_user_param(g_user_default);		// load trig_mode param from eeprom
