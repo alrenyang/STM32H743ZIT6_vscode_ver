@@ -7,6 +7,8 @@
 #include "mod_win.h"
 #include "ch_win.h"
 #include "set_win.h"
+#include "int_win.h"
+#include "mem_win.h"
 
 /* Encoder focus group (footer buttons only).
  * Table cells are intentionally NOT focusable and do NOT handle LV_EVENT_KEY.
@@ -29,10 +31,6 @@ static lv_style_t st_scr, st_hdr, st_ftr, st_panel;
 static lv_style_t st_btn, st_btn_focus, st_btn_primary, st_tag, st_tag_bad;
 // static lv_style_t st_row, st_row_focus;	//포커스 스타일
 static bool s_style_inited = false;
-
-// extern uint32_t g_rs232_baud;
-// extern uint8_t  user_ip[4];
-
 
 static void styles_init(void)
 {
@@ -140,24 +138,44 @@ static void hotkey_poll_cb(lv_timer_t * t)
             /* MODE 키: 다른 팝업만 닫고, MODE는 토글 */
             if(ui->CH_panel_mask) CHPannel_close(ui);
             if(ui->SETTING_mask)  Setting_window_close(ui);
+            if(ui->INT_mask)      Int_window_close(ui);
+            if(ui->MEM_mask)      Mem_window_close(ui);
 
             if(!ui->MODE_mask) Mode_window_open(ui);
             else               Mode_window_close(ui);
             break;
 
         case USE_KEY_SET:
-            /* SET 키도 동일 토글 패턴 추천 */
+            /* SET 키도 동일 토글 */
             if(ui->CH_panel_mask) CHPannel_close(ui);
             if(ui->MODE_mask)     Mode_window_close(ui);
+            if(ui->INT_mask)      Int_window_close(ui);
+            if(ui->MEM_mask)      Mem_window_close(ui);
 
             if(!ui->SETTING_mask) Setting_window_open(ui);
             else                  Setting_window_close(ui);
             break;
         
         case USE_KEY_INTER:
+            if(ui->CH_panel_mask) CHPannel_close(ui);
+            if(ui->MODE_mask)     Mode_window_close(ui);
+            if(ui->SETTING_mask)  Setting_window_close(ui);
+            if(ui->MEM_mask)      Mem_window_close(ui);
+
+            if(!ui->INT_mask)     Int_window_open(ui);
+            else                  Int_window_close(ui);
+
             break;
         
         case USE_KEY_MEM:
+            if(ui->CH_panel_mask) CHPannel_close(ui);
+            if(ui->MODE_mask)     Mode_window_close(ui);
+            if(ui->SETTING_mask)  Setting_window_close(ui);
+            if(ui->INT_mask)      Int_window_close(ui);
+
+            if(!ui->MEM_mask)     Mem_window_open(ui);
+            else                  Mem_window_close(ui);
+            
             break;
 
         case USE_KEY_UP:
@@ -179,14 +197,15 @@ static void hotkey_poll_cb(lv_timer_t * t)
 }
 
 /* helper */
-static lv_obj_t * make_tag(lv_obj_t * parent, const char * txt, bool bad)
+
+static lv_obj_t * make_info_label(lv_obj_t * parent, const char * text)
 {
-    lv_obj_t * l = lv_label_create(parent);
-    lv_label_set_text(l, txt);
-    lv_obj_add_style(l, &st_tag, 0);
-    if (bad) lv_obj_add_style(l, &st_tag_bad, 0);
-    return l;
+    lv_obj_t * lbl = lv_label_create(parent);
+    lv_label_set_text(lbl, text);
+    lv_obj_set_style_text_color(lbl, C_TEAL_TX, 0);
+    return lbl;
 }
+
 
 static lv_obj_t * make_btn(lv_obj_t * parent, const char * title, bool primary)
 {
@@ -338,12 +357,17 @@ ui_strobe_t * widgets_create_strobe_screen(void)
     lv_label_set_text(info_title, "STATUS");
     lv_obj_set_style_text_color(info_title, C_TEAL_TX, 0);
 
-    make_tag(p_info, "SLOT 2/8", false);
-    make_tag(p_info, "REPEAT (5)", false);
-    // make_tag(p_info, "IP: 192.168.1.100", false); 
-    
-    ui->lbl_ip_info = lv_label_create(ui->tag_ip);
-    lv_label_set_text(ui->lbl_ip_info, "IP: 192.168.1.100");
+    make_info_label(p_info, "SLOT 2/8");
+    make_info_label(p_info, "REPEAT (5)");
+
+    char ip_str[32];
+
+    snprintf(ip_str, sizeof(ip_str),
+            "IP: %u.%u.%u.%u",
+            user_ip[0], user_ip[1], user_ip[2], user_ip[3]);
+
+    ui->lbl_ip_info = make_info_label(p_info, ip_str);
+
 
     lv_obj_t * hint = lv_label_create(p_info);
     lv_label_set_text(hint, "ROT: Navigate\n(footer only)");

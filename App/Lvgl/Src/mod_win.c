@@ -210,7 +210,6 @@ void Mode_window_open(ui_strobe_t * ui)
         lv_group_focus_obj(b_mode4);
     }
     
-    
 }
 
 void Mode_mask_event_cb(lv_event_t * e)

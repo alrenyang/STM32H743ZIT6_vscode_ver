@@ -9,7 +9,6 @@ typedef struct {
 
 static ip_cell_ctx_t s_ip_ctx[4];
 
-
 static lv_style_t st_set_btn;        // 기본 버튼
 static lv_style_t st_set_btn_focus;  // 포커스/선택 강조
 static bool st_set_btn_inited = false;
@@ -90,9 +89,6 @@ void ip_cell_event_cb(lv_event_t * e)
     for(int i = 0; i < 4; i++) {
         user_ip[i] = ui->ip_cell[i].value;
     }
-
-    /* widgets.c의 "IP: a.b.c.d" 라벨 갱신 */
-    widgets_update_ip_label(ui);
 }
 /*-----------------------------------------------------------*/
 // setting window 모드키 누르면 팝업창 생성
@@ -114,8 +110,8 @@ void Setting_window_open(ui_strobe_t * ui)
     lv_obj_set_style_bg_color(ui->SETTING_mask, lv_color_black(), 0);
     lv_obj_add_flag(ui->SETTING_mask, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(ui->SETTING_mask, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_event_cb(ui->SETTING_mask,
-                        Setting_mask_event_cb, LV_EVENT_CLICKED, ui);
+    // lv_obj_add_event_cb(ui->SETTING_mask,
+    //                     Setting_mask_event_cb, LV_EVENT_CLICKED, ui);
 
     setwin_init_styles();
     /* ================= Panel ================= */
@@ -327,6 +323,7 @@ void setting_close_event_cb(lv_event_t * e)
     if(!ui) return;
 
     /* 닫기 함수가 있다면 호출 */
+    widgets_update_ip_label(ui);
     Setting_window_close(ui);
 }
 
@@ -377,18 +374,18 @@ void Setting_window_close(ui_strobe_t * ui)
 }
 
 
-uint32_t baud_from_idx(uint16_t idx)
-{
-    static const uint32_t tbl[] = { 9600, 57600, 115200};
-    if(idx >= (sizeof(tbl)/sizeof(tbl[0]))) return 115200;
-    return tbl[idx];
-}
+// uint32_t baud_from_idx(uint16_t idx)
+// {
+//     static const uint32_t tbl[] = { 9600, 57600, 115200};
+//     if(idx >= (sizeof(tbl)/sizeof(tbl[0]))) return 115200;
+//     return tbl[idx];
+// }
 
-bool parse_octet(const char *s, uint8_t *out)
-{
-    if(!s || !*s) return false;
-    int v = atoi(s);
-    if(v < 0 || v > 255) return false;
-    *out = (uint8_t)v;
-    return true;
-}
+// bool parse_octet(const char *s, uint8_t *out)
+// {
+//     if(!s || !*s) return false;
+//     int v = atoi(s);
+//     if(v < 0 || v > 255) return false;
+//     *out = (uint8_t)v;
+//     return true;
+// }

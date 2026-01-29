@@ -100,19 +100,38 @@ typedef struct {
     lv_obj_t * MODE_panel;
     lv_obj_t * MODE_btn_close;
 
+    lv_group_t * mode_grp;
+    lv_group_t * mode_grp_prev;
+
     //SETTING window
     lv_obj_t * SETTING_mask;
     lv_obj_t * SETTING_panel;
     lv_obj_t * SETTING_btn_close;
 
-    lv_group_t * mode_grp;
-    lv_group_t * mode_grp_prev;
+    lv_group_t * grp_setting;   // 설정창 포커스 그룹(있으면)
+    lv_group_t * grp_setting_prev;
+
+    //INT window
+    lv_obj_t * INT_mask;
+    lv_obj_t * INT_panel;
+    lv_obj_t * INT_btn_close;
+
+    lv_group_t * INT_grp;
+    lv_group_t * INT_grp_prev;
+
+    //mem window
+    lv_obj_t * MEM_mask;
+    lv_obj_t * MEM_panel;
+    lv_obj_t * MEM_btn_close;
+
+    lv_group_t * MEM_grp;
+    lv_group_t * MEM_grp_prev;
 
     lv_timer_t * mode_timer;   /* 필요 없으면 빼도 됨 */
     uint8_t seq_page;   // 0~PAGE_MAX-1 (Sequence 모드에서 현재 페이지)
 
     // ui_strobe_t 안에 추가(예시)
-    lv_obj_t * dd_baud;
+    // lv_obj_t * dd_baud;
     ip_cell_t ip_cell[4];
     lv_obj_t * ip_dot[3];   // optional (점 라벨 포인터 저장)
     lv_obj_t * btn_close;
@@ -121,10 +140,9 @@ typedef struct {
     lv_obj_t * baud_lbl[3];
     uint8_t    baud_idx;     // 0..2
 
-    lv_group_t * grp_setting;   // 설정창 포커스 그룹(있으면)
-    lv_group_t * grp_setting_prev;
+    
 
-    lv_obj_t * tag_ip;   // IP tag container
+    // lv_obj_t * tag_ip;   // IP tag container
     lv_obj_t * lbl_ip_info;
 
 } ui_strobe_t;
