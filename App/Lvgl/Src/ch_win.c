@@ -615,11 +615,20 @@ st_trig_con * ui_get_active_trig_con(ui_strobe_t *ui)
 
     if(g_oper_mode == 0) { /* Trigger */
         return &g_trig_con;
-    } else { /* Sequence */
+    } 
+    else if(g_oper_mode == 1) { /* Sequence */
         uint8_t p = ui->seq_page;
         if(p >= PAGE_MAX) p = 0;
         return &g_seq_con.page_con[p];
+    } 
+    else if(g_oper_mode == 2) { /* RS232*/
+        return &g_trig_con; //현재는 일단 트리거모드로
+    } 
+    else if(g_oper_mode == 3) { /* Ethernet*/
+        return &g_trig_con;  //현재는 일단 트리거모드로
     }
+
+    return &g_trig_con;
 }
 
 char trig_mode_to_char(uint8_t m)
