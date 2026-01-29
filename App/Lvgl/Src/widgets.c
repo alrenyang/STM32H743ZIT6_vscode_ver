@@ -271,6 +271,17 @@ static void encoder_group_rebuild(ui_strobe_t * ui, lv_group_t * g)
     if(ui->btn_load)  lv_group_add_obj(g, ui->btn_load);
 }
 
+void widgets_update_ip_label(ui_strobe_t * ui)
+{
+    if(!ui || !ui->lbl_ip_info) return;
+
+    char buf[32];
+    lv_snprintf(buf, sizeof(buf),
+                "IP: %u.%u.%u.%u",
+                user_ip[0], user_ip[1], user_ip[2], user_ip[3]);
+
+    lv_label_set_text(ui->lbl_ip_info, buf);
+}
 
 ui_strobe_t * widgets_create_strobe_screen(void)
 {
@@ -329,7 +340,10 @@ ui_strobe_t * widgets_create_strobe_screen(void)
 
     make_tag(p_info, "SLOT 2/8", false);
     make_tag(p_info, "REPEAT (5)", false);
-    make_tag(p_info, "COMM: OK", false);
+    // make_tag(p_info, "IP: 192.168.1.100", false); 
+    
+    ui->lbl_ip_info = lv_label_create(ui->tag_ip);
+    lv_label_set_text(ui->lbl_ip_info, "IP: 192.168.1.100");
 
     lv_obj_t * hint = lv_label_create(p_info);
     lv_label_set_text(hint, "ROT: Navigate\n(footer only)");
@@ -357,7 +371,7 @@ ui_strobe_t * widgets_create_strobe_screen(void)
     lv_obj_align(ui->lbl_mode, LV_ALIGN_TOP_RIGHT, -250, 2);
 
     ui->lbl_comm = lv_label_create(ui->header);
-    lv_label_set_text(ui->lbl_comm, "19200");
+    lv_label_set_text(ui->lbl_comm, "115200");
     lv_obj_add_style(ui->lbl_comm, &st_tag, 0);
     lv_obj_set_style_text_font(ui->lbl_comm, &lv_font_montserrat_12, 0);
     lv_obj_align(ui->lbl_comm, LV_ALIGN_TOP_RIGHT, -150, 2);

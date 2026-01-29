@@ -1,7 +1,99 @@
 #include "set_win.h"
 
+uint32_t s_baud_tbl[3] = { 9600, 57600, 115200 };
+
+typedef struct {
+    ui_strobe_t * ui;
+    uint8_t      idx;   // 0..3
+} ip_cell_ctx_t;
+
+static ip_cell_ctx_t s_ip_ctx[4];
 
 
+static lv_style_t st_set_btn;        // 기본 버튼
+static lv_style_t st_set_btn_focus;  // 포커스/선택 강조
+static bool st_set_btn_inited = false;
+
+static void setwin_init_styles(void)
+{
+    if(st_set_btn_inited) return;
+    st_set_btn_inited = true;
+
+    /* 기본 버튼 */
+    lv_style_init(&st_set_btn);
+    lv_style_set_radius(&st_set_btn, 6);
+    lv_style_set_border_width(&st_set_btn, 1);
+    lv_style_set_border_color(&st_set_btn, lv_color_hex(0x2DE0C7));
+    lv_style_set_bg_opa(&st_set_btn, LV_OPA_COVER);
+    lv_style_set_bg_color(&st_set_btn, lv_color_hex(0x0B1118));
+    lv_style_set_text_color(&st_set_btn, lv_color_white());
+    lv_style_set_pad_hor(&st_set_btn, 8);
+    lv_style_set_pad_ver(&st_set_btn, 4);
+
+    /* 포커스/선택(강조) */
+    lv_style_init(&st_set_btn_focus);
+    lv_style_set_border_width(&st_set_btn_focus, 2);
+    lv_style_set_border_color(&st_set_btn_focus, lv_color_hex(0xFFD54A)); /* 강조색 */
+    lv_style_set_bg_opa(&st_set_btn_focus, LV_OPA_COVER);
+    lv_style_set_bg_color(&st_set_btn_focus, lv_color_hex(0x12303A));     /* 살짝 밝게 */
+    lv_style_set_text_color(&st_set_btn_focus, lv_color_white());
+}
+
+
+void baud_btn_event_cb(lv_event_t * e)
+{
+    ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
+    lv_obj_t * btn = lv_event_get_target(e);
+
+    if(!ui) return;
+    if(lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+
+    int idx = (int)(intptr_t)lv_obj_get_user_data(btn);
+    if(idx < 0 || idx >= 3) return;
+
+    ui->baud_idx = (uint8_t)idx;
+    g_rs232_baud = s_baud_tbl[idx];
+
+    /* === 선택 상태 갱신 === */
+    for(int i = 0; i < 3; i++) {
+        if(i == idx) lv_obj_add_state(ui->baud_btn[i], LV_STATE_CHECKED);
+        else         lv_obj_clear_state(ui->baud_btn[i], LV_STATE_CHECKED);
+    }
+
+    /* === ★ widgets.c의 통신 상태 라벨 갱신 ★ === */
+    if(ui->lbl_comm) {
+        char buf[8];
+        lv_snprintf(buf, sizeof(buf), "%lu", (unsigned long)g_rs232_baud);
+        lv_label_set_text(ui->lbl_comm, buf);
+    }
+}
+
+void ip_cell_event_cb(lv_event_t * e)
+{
+    ip_cell_ctx_t * ctx = (ip_cell_ctx_t *)lv_event_get_user_data(e);
+    if(!ctx || !ctx->ui) return;
+
+    ui_strobe_t * ui = ctx->ui;
+    uint8_t idx = ctx->idx;
+    if(idx >= 4) return;
+
+    if(lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+
+    /* 값 증가 */
+    ui->ip_cell[idx].value = (uint8_t)((ui->ip_cell[idx].value + 1) % 256);
+
+    char buf[4];
+    lv_snprintf(buf, sizeof(buf), "%u", (unsigned)ui->ip_cell[idx].value);
+    lv_label_set_text(ui->ip_cell[idx].lbl, buf);
+
+    /* 실제 user_ip[]도 즉시 반영 */
+    for(int i = 0; i < 4; i++) {
+        user_ip[i] = ui->ip_cell[i].value;
+    }
+
+    /* widgets.c의 "IP: a.b.c.d" 라벨 갱신 */
+    widgets_update_ip_label(ui);
+}
 /*-----------------------------------------------------------*/
 // setting window 모드키 누르면 팝업창 생성
 /*-----------------------------------------------------------*/
@@ -21,13 +113,11 @@ void Setting_window_open(ui_strobe_t * ui)
     lv_obj_set_style_bg_opa(ui->SETTING_mask, LV_OPA_50, 0);
     lv_obj_set_style_bg_color(ui->SETTING_mask, lv_color_black(), 0);
     lv_obj_add_flag(ui->SETTING_mask, LV_OBJ_FLAG_CLICKABLE);
-
-    /* ★ 중요: SETTING 전용 마스크 콜백 */
-    lv_obj_add_event_cb(ui->SETTING_mask, Setting_mask_event_cb, LV_EVENT_CLICKED, ui);
-
-    /* ★ 중요: 스크롤 금지 */
     lv_obj_clear_flag(ui->SETTING_mask, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(ui->SETTING_mask,
+                        Setting_mask_event_cb, LV_EVENT_CLICKED, ui);
 
+    setwin_init_styles();
     /* ================= Panel ================= */
     const lv_coord_t pw = (DISP_W * 2) / 3;
     const lv_coord_t ph = (DISP_H * 2) / 3;
@@ -41,126 +131,182 @@ void Setting_window_open(ui_strobe_t * ui)
     lv_obj_set_style_bg_color(ui->SETTING_panel, lv_color_hex(0x0B1118), 0);
     lv_obj_set_style_radius(ui->SETTING_panel, 10, 0);
     lv_obj_set_style_border_width(ui->SETTING_panel, 2, 0);
-    lv_obj_set_style_border_color(ui->SETTING_panel, lv_color_hex(0x2DE0C7), 0);
-    lv_obj_set_style_pad_all(ui->SETTING_panel, 12, 0);
-    lv_obj_set_style_pad_row(ui->SETTING_panel, 8, 0);
+    lv_obj_set_style_border_color(ui->SETTING_panel,
+                                  lv_color_hex(0x2DE0C7), 0);
 
+    lv_obj_set_style_pad_all(ui->SETTING_panel, 8, 0);
+    lv_obj_set_style_pad_row(ui->SETTING_panel, 6, 0);
     lv_obj_set_flex_flow(ui->SETTING_panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_clear_flag(ui->SETTING_panel, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_clear_flag(ui->SETTING_panel, LV_OBJ_FLAG_EVENT_BUBBLE);
 
-    /* ★ 중요: panel 스크롤 금지 */
-    lv_obj_clear_flag(ui->SETTING_panel, LV_OBJ_FLAG_SCROLLABLE);
-
-    /* ===== Title ===== */
+    /* ================= Title ================= */
     lv_obj_t * title = lv_label_create(ui->SETTING_panel);
     lv_label_set_text(title, "SETTING");
     lv_obj_set_style_text_color(title, lv_color_white(), 0);
+    lv_obj_set_style_text_line_space(title, 0, 0);
 
-    /* ===== Row: RS232 Baudrate ===== */
+   /* ================= Row: RS232 Baud ================= */
     lv_obj_t * row_baud = lv_obj_create(ui->SETTING_panel);
     lv_obj_remove_style_all(row_baud);
     lv_obj_set_width(row_baud, LV_PCT(100));
-    lv_obj_set_flex_flow(row_baud, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(row_baud, 10, 0);
+    lv_obj_set_height(row_baud, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row_baud, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(row_baud, 0, 0);
+    lv_obj_set_style_pad_row(row_baud, 6, 0);   // 라벨-버튼 간격
+    lv_obj_set_style_pad_column(row_baud, 6, 0);
 
     lv_obj_t * lbl_baud = lv_label_create(row_baud);
     lv_label_set_text(lbl_baud, "RS232 Baud");
     lv_obj_set_style_text_color(lbl_baud, lv_color_white(), 0);
 
-    ui->dd_baud = lv_dropdown_create(row_baud);
-    lv_dropdown_set_options(ui->dd_baud,
-        "9600\n"
-        "57600\n"
-        "115200\n"
-    );
+    /* 버튼 라인 */
+    lv_obj_t * baud_line = lv_obj_create(row_baud);
+    lv_obj_remove_style_all(baud_line);
+    lv_obj_set_width(baud_line, LV_PCT(100));
+    lv_obj_set_height(baud_line, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(baud_line, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_row(baud_line, 6, 0);
+    lv_obj_set_style_pad_column(baud_line, 8, 0);
 
-    switch(g_rs232_baud){
-    case 9600:   lv_dropdown_set_selected(ui->dd_baud, 0); break;
-    case 57600:  lv_dropdown_set_selected(ui->dd_baud, 1); break;
-    case 115200: lv_dropdown_set_selected(ui->dd_baud, 2); break;
-    default:     lv_dropdown_set_selected(ui->dd_baud, 2); break;
+    /* 초기 선택값(예: g_rs232_baud 기반) */
+    ui->baud_idx = 2; // 기본 115200
+    for(int i=0;i<3;i++){
+        if(g_rs232_baud == s_baud_tbl[i]) { ui->baud_idx = (uint8_t)i; break; }
     }
 
-    /* ===== Row: TCP/IP Address ===== */
+    for(int i = 0; i < 3; i++) {
+        ui->baud_btn[i] = lv_btn_create(baud_line);
+        lv_obj_set_size(ui->baud_btn[i], 72, 30);
+
+        /* 스타일만 적용 (동작/레이아웃 변경 없음) */
+        lv_obj_add_style(ui->baud_btn[i], &st_set_btn, 0);
+        lv_obj_add_style(ui->baud_btn[i], &st_set_btn_focus, LV_STATE_FOCUSED);
+        lv_obj_add_style(ui->baud_btn[i], &st_set_btn_focus, LV_STATE_CHECKED);
+
+        /* checkable로 만들어서 선택 표시 가능 */
+        lv_obj_add_flag(ui->baud_btn[i], LV_OBJ_FLAG_CHECKABLE);
+
+        /* 버튼 user_data에 index 저장 */
+        lv_obj_set_user_data(ui->baud_btn[i], (void *)(intptr_t)i);
+
+        ui->baud_lbl[i] = lv_label_create(ui->baud_btn[i]);
+        char t[8];
+        lv_snprintf(t, sizeof(t), "%lu", (unsigned long)s_baud_tbl[i]);
+        lv_label_set_text(ui->baud_lbl[i], t);
+        lv_obj_center(ui->baud_lbl[i]);
+
+        lv_obj_add_event_cb(ui->baud_btn[i], baud_btn_event_cb, LV_EVENT_CLICKED, ui);
+    }
+
+    /* 초기 체크 반영 */
+    for(int i = 0; i < 3; i++) {
+        if(i == ui->baud_idx) lv_obj_add_state(ui->baud_btn[i], LV_STATE_CHECKED);
+        else                  lv_obj_clear_state(ui->baud_btn[i], LV_STATE_CHECKED);
+    }
+
+    /* ================= Row: TCP/IP Address ================= */
     lv_obj_t * row_ip = lv_obj_create(ui->SETTING_panel);
     lv_obj_remove_style_all(row_ip);
     lv_obj_set_width(row_ip, LV_PCT(100));
+    lv_obj_set_height(row_ip, LV_SIZE_CONTENT);
+
     lv_obj_set_flex_flow(row_ip, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(row_ip, 0, 0);
     lv_obj_set_style_pad_row(row_ip, 6, 0);
 
     lv_obj_t * lbl_ip = lv_label_create(row_ip);
     lv_label_set_text(lbl_ip, "TCP/IP Address");
     lv_obj_set_style_text_color(lbl_ip, lv_color_white(), 0);
+    lv_obj_set_style_text_line_space(lbl_ip, 0, 0);
 
     lv_obj_t * ip_line = lv_obj_create(row_ip);
     lv_obj_remove_style_all(ip_line);
     lv_obj_set_width(ip_line, LV_PCT(100));
+    lv_obj_set_height(ip_line, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(ip_line, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(ip_line, 2, 0);
     lv_obj_set_style_pad_column(ip_line, 6, 0);
 
-    for(int i=0;i<4;i++){
-        ui->ta_ip[i] = lv_textarea_create(ip_line);
-        lv_obj_set_size(ui->ta_ip[i], 48, 26);
-        lv_textarea_set_one_line(ui->ta_ip[i], true);
-        lv_textarea_set_max_length(ui->ta_ip[i], 3);
-        lv_textarea_set_accepted_chars(ui->ta_ip[i], "0123456789");
-        lv_textarea_set_text(ui->ta_ip[i], "0");
-        lv_textarea_set_cursor_click_pos(ui->ta_ip[i], false);
+    for(int i = 0; i < 4; i++) {
 
-        if(i != 3){
-            lv_obj_t * dot = lv_label_create(ip_line);
-            lv_label_set_text(dot, ".");
-            lv_obj_set_style_text_color(dot, lv_color_white(), 0);
+        /* 버튼 */
+        ui->ip_cell[i].btn = lv_btn_create(ip_line);
+        lv_obj_set_size(ui->ip_cell[i].btn, 56, 30);
+
+        /* 스타일만 적용 (동작/레이아웃 변경 없음) */
+        lv_obj_add_style(ui->ip_cell[i].btn, &st_set_btn, 0);
+        lv_obj_add_style(ui->ip_cell[i].btn, &st_set_btn_focus, LV_STATE_FOCUSED);
+        lv_obj_add_style(ui->ip_cell[i].btn, &st_set_btn_focus, LV_STATE_PRESSED);
+
+        /* 라벨 */
+        ui->ip_cell[i].lbl = lv_label_create(ui->ip_cell[i].btn);
+
+        /* 초기 값 */
+        ui->ip_cell[i].value = (uint8_t)user_ip[i];
+
+        char tmp[4];
+        lv_snprintf(tmp, sizeof(tmp), "%u", (unsigned)ui->ip_cell[i].value);
+        lv_label_set_text(ui->ip_cell[i].lbl, tmp);
+        lv_obj_center(ui->ip_cell[i].lbl);
+
+
+        s_ip_ctx[i].ui  = ui;
+        s_ip_ctx[i].idx = (uint8_t)i;
+
+        lv_obj_add_event_cb(ui->ip_cell[i].btn,
+                            ip_cell_event_cb,
+                            LV_EVENT_CLICKED,
+                            &s_ip_ctx[i]);
+
+        /* 점(.) */
+        if(i < 3) {
+            ui->ip_dot[i] = lv_label_create(ip_line);
+            lv_label_set_text(ui->ip_dot[i], ".");
+            lv_obj_set_style_text_color(ui->ip_dot[i], lv_color_white(), 0);
+        } else {
+            /* 마지막은 dot 없음 */
         }
     }
 
-    char tmp[4];
-    for(int i=0;i<4;i++){
-        lv_snprintf(tmp, sizeof(tmp), "%u", (unsigned)user_ip[i]);
-        lv_textarea_set_text(ui->ta_ip[i], tmp);
-    }
-
-    /* ===== Buttons (Apply / Close) ===== */
+    /* ================= Button: CLOSE only ================= */
     lv_obj_t * row_btn = lv_obj_create(ui->SETTING_panel);
     lv_obj_remove_style_all(row_btn);
     lv_obj_set_width(row_btn, LV_PCT(100));
+    lv_obj_set_height(row_btn, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(row_btn, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(row_btn, 10, 0);
+    lv_obj_set_style_pad_all(row_btn, 0, 0);
 
-    ui->btn_apply = mode_make_btn(row_btn, "APPLY");
     ui->btn_close = mode_make_btn(row_btn, "CLOSE");
+    lv_obj_add_event_cb(ui->btn_close,setting_close_event_cb, LV_EVENT_CLICKED, ui);
 
-    lv_obj_add_event_cb(ui->btn_apply, setting_apply_event_cb, LV_EVENT_CLICKED, ui);
-    lv_obj_add_event_cb(ui->btn_close, setting_close_event_cb, LV_EVENT_CLICKED, ui);
-
-    /* ================= Group (Encoder/Keypad) =================
-     * 중요: 위젯 생성이 끝난 "마지막"에 그룹 생성/연결/포커스
-     */
-    ui->grp_setting_prev = s_group;          /* (헤더에 추가했거나, 없다면 이 줄 제거) */
+    /* ================= Group (Encoder / Keypad) ================= */
+    ui->grp_setting_prev = s_group;
     ui->grp_setting = lv_group_create();
     lv_group_set_wrap(ui->grp_setting, true);
     lv_group_set_editing(ui->grp_setting, false);
-
     lv_group_set_default(ui->grp_setting);
 
     lv_indev_t * enc = lv_port_indev_get_encoder();
     lv_indev_t * kp  = lv_port_indev_get_keypad();
     if(enc) lv_indev_set_group(enc, ui->grp_setting);
     if(kp)  lv_indev_set_group(kp,  ui->grp_setting);
-
     if(enc) lv_indev_wait_release(enc);
     if(kp)  lv_indev_wait_release(kp);
 
-    lv_group_add_obj(ui->grp_setting, ui->dd_baud);
-    lv_group_add_obj(ui->grp_setting, ui->ta_ip[0]);
-    lv_group_add_obj(ui->grp_setting, ui->ta_ip[1]);
-    lv_group_add_obj(ui->grp_setting, ui->ta_ip[2]);
-    lv_group_add_obj(ui->grp_setting, ui->ta_ip[3]);
-    lv_group_add_obj(ui->grp_setting, ui->btn_apply);
+    lv_group_add_obj(ui->grp_setting, ui->baud_btn[0]);
+    lv_group_add_obj(ui->grp_setting, ui->baud_btn[1]);
+    lv_group_add_obj(ui->grp_setting, ui->baud_btn[2]);
+    lv_group_add_obj(ui->grp_setting, ui->ip_cell[0].btn);
+    lv_group_add_obj(ui->grp_setting, ui->ip_cell[1].btn);
+    lv_group_add_obj(ui->grp_setting, ui->ip_cell[2].btn);
+    lv_group_add_obj(ui->grp_setting, ui->ip_cell[3].btn);
     lv_group_add_obj(ui->grp_setting, ui->btn_close);
 
-    lv_group_focus_obj(ui->dd_baud);
+    lv_group_focus_obj(ui->ip_cell[0].btn);
+
 }
+
 
 /*-----------------------------------------------------------*/
 // SETTING mask click -> close
@@ -175,41 +321,6 @@ void Setting_mask_event_cb(lv_event_t * e)
     Setting_window_close(ui);
 }
 
-
-void setting_apply_event_cb(lv_event_t * e)
-{
-    ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
-    if(!ui) return;
-
-    /* 1) Baud 반영 */
-    uint16_t sel = lv_dropdown_get_selected(ui->dd_baud);
-
-    // extern uint32_t g_rs232_baud;
-    g_rs232_baud = baud_from_idx(sel);
-
-    /* TODO: 실제 UART 재설정 함수 호출 */
-    // RS232_Reinit(g_rs232_baud);
-
-    /* 2) IP 반영(검증) */
-    uint8_t new_ip[4];
-    for(int i=0;i<4;i++){
-        if(!parse_octet(lv_textarea_get_text(ui->ta_ip[i]), &new_ip[i])){
-            /* 값이 이상하면 여기서 에러 표시(토스트/라벨 등) */
-            // show_toast("Invalid IP");
-            return;
-        }
-    }
-
-    for(int i=0;i<4;i++) user_ip[i] = new_ip[i];
-
-    /* TODO: 실제 TCP/IP 스택 재설정/저장 */
-    // Net_SetIP(user_ip);
-    // Config_Save();
-
-    /* 필요하면 창 닫기 */
-    // Setting_window_close(ui);
-}
-
 void setting_close_event_cb(lv_event_t * e)
 {
     ui_strobe_t * ui = (ui_strobe_t *)lv_event_get_user_data(e);
@@ -222,11 +333,6 @@ void setting_close_event_cb(lv_event_t * e)
 void Setting_window_close(ui_strobe_t * ui)
 {
     if(!ui) return;
-
-    /* 타이머가 있으면 정지 (있을 때만) */
-    // if(ui->setting_timer) {
-    //     lv_timer_pause(ui->setting_timer);
-    // }
 
     lv_indev_t * enc = lv_port_indev_get_encoder();
     lv_indev_t * kp  = lv_port_indev_get_keypad();
@@ -247,22 +353,29 @@ void Setting_window_close(ui_strobe_t * ui)
     }
     ui->grp_setting_prev = NULL;
 
-    /* SETTING 마스크/패널 삭제 */
+    /* SETTING 마스크/패널 삭제 (mask 삭제하면 자식(panel 포함)도 같이 삭제됨) */
     if(ui->SETTING_mask) {
         lv_obj_del(ui->SETTING_mask);
         ui->SETTING_mask = NULL;
     }
 
     /* 포인터 정리 */
-    ui->SETTING_panel   = NULL;
+    ui->SETTING_panel     = NULL;
     ui->SETTING_btn_close = NULL;
 
-    ui->dd_baud = NULL;
-    for(int i=0;i<4;i++) ui->ta_ip[i] = NULL;
+    /* ip_cell / dot 정리 (구조체는 NULL 불가 → 멤버만 NULL) */
+    for(int i = 0; i < 4; i++) {
+        ui->ip_cell[i].btn   = NULL;
+        ui->ip_cell[i].lbl   = NULL;
+        ui->ip_cell[i].value = 0;
+    }
+    for(int i = 0; i < 3; i++) {
+        ui->ip_dot[i] = NULL;
+    }
 
-    ui->btn_apply = NULL;
     ui->btn_close = NULL;
 }
+
 
 uint32_t baud_from_idx(uint16_t idx)
 {

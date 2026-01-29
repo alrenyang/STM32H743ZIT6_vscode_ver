@@ -35,6 +35,12 @@ typedef enum {
 
 
 typedef struct {
+    lv_obj_t * btn;
+    lv_obj_t * lbl;
+    uint8_t    value;   // 0~255
+} ip_cell_t;
+
+typedef struct {
     lv_obj_t * scr;
 
     lv_obj_t * CH_panel_mask;
@@ -107,14 +113,23 @@ typedef struct {
 
     // ui_strobe_t 안에 추가(예시)
     lv_obj_t * dd_baud;
-    lv_obj_t * ta_ip[4];
-    lv_obj_t * btn_apply;
+    ip_cell_t ip_cell[4];
+    lv_obj_t * ip_dot[3];   // optional (점 라벨 포인터 저장)
     lv_obj_t * btn_close;
+
+    lv_obj_t * baud_btn[3];
+    lv_obj_t * baud_lbl[3];
+    uint8_t    baud_idx;     // 0..2
 
     lv_group_t * grp_setting;   // 설정창 포커스 그룹(있으면)
     lv_group_t * grp_setting_prev;
 
+    lv_obj_t * tag_ip;   // IP tag container
+    lv_obj_t * lbl_ip_info;
+
 } ui_strobe_t;
+
+
 
 ui_strobe_t * widgets_create_strobe_screen(void);
 void widgets_bind_encoder(ui_strobe_t * ui, lv_indev_t * indev_encoder);
@@ -123,7 +138,7 @@ void widgets_bind_encoder(ui_strobe_t * ui, lv_indev_t * indev_encoder);
 void widgets_table_set_channel_count(ui_strobe_t * ui, uint16_t new_count);
 void widgets_table_set_cell(ui_strobe_t * ui, uint16_t ch0, uint16_t col, const char * txt);
 void table_format_cell(ui_strobe_t * ui, uint16_t row, uint16_t col);
-
+void widgets_update_ip_label(ui_strobe_t * ui);
 
 #ifdef __cplusplus
 }
