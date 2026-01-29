@@ -4,3 +4,4 @@ mx.scratch
 tmux-server-*.log
 tmux-server-*.log
 *.log
+*.log
