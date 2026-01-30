@@ -276,6 +276,10 @@ void Setting_window_open(ui_strobe_t * ui)
     ui->btn_close = mode_make_btn(row_btn, "CLOSE");
     lv_obj_add_event_cb(ui->btn_close,setting_close_event_cb, LV_EVENT_CLICKED, ui);
 
+    lv_obj_add_style(ui->btn_close, &st_set_btn, 0);
+    lv_obj_add_style(ui->btn_close, &st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(ui->btn_close, &st_set_btn_focus, LV_STATE_PRESSED);
+
     /* ================= Group (Encoder / Keypad) ================= */
     ui->grp_setting_prev = s_group;
     ui->grp_setting = lv_group_create();
