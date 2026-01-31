@@ -1,4 +1,5 @@
 #include "ch_win.h"
+#include "ui_styles.h"
 
 void CH_open(ui_strobe_t * ui)
 {
@@ -15,6 +16,8 @@ void CH_open(ui_strobe_t * ui)
     lv_obj_set_style_bg_color(ui->CH_panel_mask, lv_color_black(), 0);
     lv_obj_add_flag(ui->CH_panel_mask, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(ui->CH_panel_mask, CHPannel_mask_event_cb, LV_EVENT_CLICKED, ui);
+    
+    ui_styles_init_set_btn();
 
     const lv_coord_t pw = (DISP_W * 2) / 3;
     const lv_coord_t ph = (DISP_H * 2) / 3;
@@ -131,19 +134,36 @@ void CH_open(ui_strobe_t * ui)
     lv_obj_add_event_cb(b3, ch_item_event_cb, LV_EVENT_ALL, ui);
 
     ui->CH_btn_close = lv_btn_create(ui->CH_panel);
-    lv_obj_set_size(ui->CH_btn_close, LV_PCT(100), 34);
 
-    lv_obj_set_style_bg_color(ui->CH_btn_close, lv_color_hex(0x1C2B34), 0);
-    lv_obj_set_style_bg_opa(ui->CH_btn_close, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(ui->CH_btn_close, 6, 0);
-    lv_obj_set_style_border_width(ui->CH_btn_close, 1, 0);
-    lv_obj_set_style_border_color(ui->CH_btn_close, lv_color_hex(0x2DE0C7), 0);
+    /* 1) 먼저 스타일 초기화/적용 */
+    lv_obj_remove_style_all(ui->CH_btn_close);
+    lv_obj_add_style(ui->CH_btn_close, &g_st_set_btn, 0);
+    lv_obj_add_style(ui->CH_btn_close, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(ui->CH_btn_close, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
+    /* 2) 크기 지정 (스타일 적용 후에) */
+    lv_obj_set_width(ui->CH_btn_close, LV_PCT(100));   // 패널 기준 100%
+    lv_obj_set_height(ui->CH_btn_close, 36);
+
+    /* 3) 패널 padding은 패널 만들자마자 주는 게 베스트지만,
+        여기서 해도 되긴 함 (그래도 여기선 유지) */
+    lv_obj_set_style_pad_left(ui->CH_panel, 4, 0);
+    lv_obj_set_style_pad_right(ui->CH_panel, 4, 0);
+
+    /* 4) ★ 핵심: flex에서 자식만 가운데 정렬 (align_self) */
+    lv_obj_set_style_align(ui->CH_btn_close, LV_ALIGN_CENTER, 0);
+
+    /* 이벤트 */
     lv_obj_add_event_cb(ui->CH_btn_close, CHPannel_close_btn_cb, LV_EVENT_CLICKED, ui);
 
+    /* 라벨 */
     lv_obj_t * lbl = lv_label_create(ui->CH_btn_close);
     lv_label_set_text(lbl, "CLOSE");
     lv_obj_center(lbl);
+
+    /* (선택) 레이아웃 강제 갱신 */
+    lv_obj_update_layout(ui->CH_panel);
+
 
     ui->ch_grp_prev = s_group;
     ui->ch_grp = lv_group_create();
@@ -354,20 +374,17 @@ lv_obj_t * ch_make_item(ui_strobe_t * ui, lv_obj_t * parent, const char * name, 
 
     lv_obj_t * btn = lv_btn_create(parent);
 
+    lv_obj_remove_style_all(btn);
+
+    lv_obj_add_style(btn, &g_st_set_btn, 0);
+    lv_obj_add_style(btn, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(btn, &g_st_set_btn_focus, LV_STATE_PRESSED);
+
     lv_obj_set_flex_grow(btn, 1);
     lv_obj_set_height(btn, 32);
 
-    lv_obj_set_style_radius(btn, 6, 0);
-    lv_obj_set_style_pad_all(btn, 0, 0);
-    lv_obj_set_style_bg_opa(btn, LV_OPA_20, 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1C2B34), 0);
-
-    lv_obj_set_style_border_width(btn, 2, LV_STATE_FOCUSED);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x2DE0C7), LV_STATE_FOCUSED);
-
     lv_obj_t * l_val = lv_label_create(btn);
     lv_label_set_text(l_val, "-");
-    lv_obj_set_style_text_color(l_val, lv_color_hex(0xDDE6EE), 0);
     lv_obj_center(l_val);
 
     ui->ch_item_btn[idx] = btn;
@@ -435,9 +452,18 @@ void ch_edit_timer_cb(lv_timer_t * t)
     uint16_t r = ui->sel_row;
     if(r >= ui->ch_count) return;
 
-    st_trig_con * conf = ui_get_active_trig_con(ui);
-    st_channel_con * ch = &conf->ch_con[r];
+    st_channel_con * ch = NULL;
 
+    if(g_oper_mode == 0){   //트리거 모드 일떄
+        st_trig_con * conf = get_trigger_con();
+        ch = &conf->ch_con[r];
+    }else if(g_oper_mode == 1){   //시퀀스 모드 일떄
+        st_seq_con * conf = get_sequence_con();
+        ch = &conf->page_con[ui->seq_page].ch_con[r];
+    }else {
+        return; // RS232/Ethernet면 여기선 처리 안 함
+    }
+    
     switch(field) {
     case 0: { /* ON */
         int v = (int)ch->on + dir * step;
@@ -477,8 +503,6 @@ void ch_edit_timer_cb(lv_timer_t * t)
         table_format_cell(ui, r, c);
     }
 
-    g_trig_con = * conf;
-    eeprom_save_sys();
     lv_obj_invalidate(ui->tbl_body); /* 디버그/확실한 리프레시용 */
 }
 
@@ -488,13 +512,29 @@ void ch_panel_refresh(ui_strobe_t * ui)
     uint16_t r = ui->sel_row;
     if(r >= ui->ch_count) r = 0;
 
-    st_trig_con * conf = ui_get_active_trig_con(ui);
-    st_channel_con * ch = &conf->ch_con[r];
+    // st_trig_con * conf = get_trigger_con();
+    // st_channel_con * ch = &conf->ch_con[r];
+
+    st_channel_con * ch = NULL;
+
+    if(g_oper_mode == 0){   //트리거 모드 일떄
+        st_trig_con * conf = get_trigger_con();
+        ch = &conf->ch_con[r];
+    }else if(g_oper_mode == 1){   //시퀀스 모드 일떄
+        st_seq_con * conf = get_sequence_con();
+        ch = &conf->page_con[ui->seq_page].ch_con[r];
+    }else {
+        return; // RS232/Ethernet면 여기선 처리 안 함
+    }
 
     if(ui->ch_title) {
         char t[24];
-        if(g_oper_mode == 0) lv_snprintf(t, sizeof(t), "CH %02u", (unsigned)(r+1));
-        else                 lv_snprintf(t, sizeof(t), "P%u CH %02u", (unsigned)(ui->seq_page+1), (unsigned)(r+1));
+        if(g_oper_mode == 0) {
+            lv_snprintf(t, sizeof(t), "CH %02u", (unsigned)(r+1));
+        }
+        else {
+            lv_snprintf(t, sizeof(t), "P%u CH %02u", (unsigned)(ui->seq_page+1), (unsigned)(r+1));
+        }
         lv_label_set_text(ui->ch_title, t);
     }
 
@@ -544,16 +584,38 @@ void CHPannel_close(ui_strobe_t * ui)
 
 }
 
-void ch_apply_to_all(ui_strobe_t *ui, uint16_t src)
+void ch_apply_to_all(ui_strobe_t * ui, uint16_t src)
 {
     if(!ui) return;
     if(src >= ui->ch_count) return;
 
-    st_trig_con * conf = ui_get_active_trig_con(ui);
-    st_channel_con v = conf->ch_con[src];
+    st_channel_con * base = NULL;   // 현재 모드에서 "채널 배열 시작 주소"
+    st_channel_con   v;             // 복사할 값(원본 채널 1개)
 
-    for(uint16_t i = 0; i < ui->ch_count; i++){
-        conf->ch_con[i] = v;
+    if(g_oper_mode == 0) {
+        st_trig_con * conf = get_trigger_con();
+        if(!conf) return;
+        
+        base = conf->ch_con;        // [0..ch_count-1]
+        v = base[src];
+    }
+    else if(g_oper_mode == 1) {
+        st_seq_con * conf = get_sequence_con();
+        if(!conf) return;
+
+        if(ui->seq_page >= PAGE_MAX) return;
+
+        base = conf->page_con[ui->seq_page].ch_con; // 해당 페이지의 채널 배열
+        v = base[src];
+    }
+    else {
+        return; // RS232/Ethernet 등은 여기서 처리 안 함
+    }
+
+    if(!base) return;
+
+    for(uint16_t i = 0; i < ui->ch_count; i++) {
+        base[i] = v;
     }
 }
 

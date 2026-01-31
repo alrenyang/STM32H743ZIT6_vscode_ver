@@ -3,6 +3,7 @@
 
 #include "lvgl.h"
 #include "src/misc/lv_types.h"
+#include "com_widget.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -140,8 +141,6 @@ typedef struct {
     lv_obj_t * baud_lbl[3];
     uint8_t    baud_idx;     // 0..2
 
-    
-
     // lv_obj_t * tag_ip;   // IP tag container
     lv_obj_t * lbl_ip_info;
 
@@ -157,6 +156,11 @@ void widgets_table_set_channel_count(ui_strobe_t * ui, uint16_t new_count);
 void widgets_table_set_cell(ui_strobe_t * ui, uint16_t ch0, uint16_t col, const char * txt);
 void table_format_cell(ui_strobe_t * ui, uint16_t row, uint16_t col);
 void widgets_update_ip_label(ui_strobe_t * ui);
+
+void widgets_table_refresh(ui_strobe_t * ui);
+
+st_trig_con * get_trigger_con(void);    //트리거모드 구조체 얻어옴.
+st_seq_con * get_sequence_con(void);    //시퀀스모드 구조체 얻어옴.
 
 #ifdef __cplusplus
 }

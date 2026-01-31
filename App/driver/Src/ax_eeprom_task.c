@@ -64,9 +64,9 @@ void eeprom_save_facotry(void)
 	{
 		for(i=0; i<16; i++)
 		{
-			g_seq_con.page_con[j].ch_con[i].delay = 10;
-			g_seq_con.page_con[j].ch_con[i].on = 20;
-			g_seq_con.page_con[j].ch_con[i].block = 30;
+			g_seq_con.page_con[j].ch_con[i].delay = 990;
+			g_seq_con.page_con[j].ch_con[i].on = 330;
+			g_seq_con.page_con[j].ch_con[i].block = 440;
 			g_seq_con.page_con[j].ch_con[i].trig_mode = 0;
 		}
 	}

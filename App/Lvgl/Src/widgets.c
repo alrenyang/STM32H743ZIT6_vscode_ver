@@ -3,7 +3,7 @@
 #include "key_input.h"
 #include "lvgl.h"
 
-#include "com_widget.h"
+// #include "com_widget.h"
 #include "mod_win.h"
 #include "ch_win.h"
 #include "set_win.h"
@@ -120,6 +120,21 @@ static void styles_init(void)
     lv_style_set_pad_right(&g_st_row_focus, 1);
 }
 
+st_trig_con * get_trigger_con(void)
+{
+    if(g_oper_mode != 0)
+        return NULL;
+
+    return &g_trig_con;  
+}
+
+st_seq_con * get_sequence_con(void)
+{
+    if(g_oper_mode != 1)
+        return NULL;
+
+    return &g_seq_con;
+}
 
 /*-----------------------------------------------------------*/
 // global 키 입력
@@ -231,8 +246,20 @@ void table_format_cell(ui_strobe_t * ui, uint16_t r, uint16_t c)
     lv_obj_t * lbl = ui->tbl_cell_lbl[r][c];
     if(!lbl) return;
 
-    st_trig_con * conf = ui_get_active_trig_con(ui);
-    st_channel_con * ch = &conf->ch_con[r];
+    // st_trig_con * conf = ui_get_active_trig_con(ui);
+    // st_channel_con * ch = &conf->ch_con[r];
+
+    st_channel_con * ch = NULL;
+
+    if(g_oper_mode == 0){   //트리거 모드 일떄
+        st_trig_con * conf = get_trigger_con();
+        ch = &conf->ch_con[r];
+    }else if(g_oper_mode == 1){   //시퀀스 모드 일떄
+        st_seq_con * conf = get_sequence_con();
+        ch = &conf->page_con[ui->seq_page].ch_con[r];
+    }else {
+        return; // RS232/Ethernet면 여기선 처리 안 함
+    }
 
     char buf[24];
 
@@ -296,7 +323,7 @@ void widgets_update_ip_label(ui_strobe_t * ui)
 
     char buf[32];
     lv_snprintf(buf, sizeof(buf),
-                "IP: %u.%u.%u.%u",
+                "IP:\n %u.%u.%u.%u",
                 user_ip[0], user_ip[1], user_ip[2], user_ip[3]);
 
     lv_label_set_text(ui->lbl_ip_info, buf);
@@ -363,14 +390,14 @@ ui_strobe_t * widgets_create_strobe_screen(void)
     char ip_str[32];
 
     snprintf(ip_str, sizeof(ip_str),
-            "IP: %u.%u.%u.%u",
+            "IP:\n %u.%u.%u.%u",
             user_ip[0], user_ip[1], user_ip[2], user_ip[3]);
 
     ui->lbl_ip_info = make_info_label(p_info, ip_str);
 
 
     lv_obj_t * hint = lv_label_create(p_info);
-    lv_label_set_text(hint, "ROT: Navigate\n(footer only)");
+    lv_label_set_text(hint, "rs232: not\n(GIU only)");
     lv_obj_set_style_text_color(hint, C_DIM, 0);
 
     ui->header = lv_obj_create(ui->scr);
@@ -514,4 +541,15 @@ void widgets_destroy_strobe_screen(ui_strobe_t * ui)
     }
 
     lv_free(ui);
+}
+
+void widgets_table_refresh(ui_strobe_t * ui)
+{
+    if(!ui || !ui->tbl_cell_lbl) return;
+
+    for(uint16_t r = 0; r < ui->ch_count; r++) {
+        for(uint16_t c = 0; c < TBL_COLS; c++) {
+            table_format_cell(ui, r, c);
+        }
+    }
 }

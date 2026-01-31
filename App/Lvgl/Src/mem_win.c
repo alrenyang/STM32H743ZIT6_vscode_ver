@@ -294,16 +294,28 @@ void mem_btn_event_cb(lv_event_t * e)
     uint8_t n_vlue = 0;
     if(m == 0){
         n_vlue = 0;
+        g_user_default = n_vlue;
+        //eeprom에 저장
     }else if(m == 1){
         n_vlue = 1;
+        g_user_default = n_vlue;
+        //eeprom에 저장
     }else if(m == 2){
         n_vlue = 2;
+        g_user_default = n_vlue;
+        //eeprom에 저장
     }else if(m == 3){
         n_vlue = 0;
+        //eeprom에서 g_user_default를 불러와 테이블 리로드
+        widgets_table_refresh(ui);
     }else if(m == 4){
         n_vlue = 1;
+        //eeprom에서 g_user_default를 불러와 테이블 리로드
+        widgets_table_refresh(ui);
     }else if(m == 5){
         n_vlue = 2;
+        //eeprom에서 g_user_default를 불러와 테이블 리로드
+        widgets_table_refresh(ui);
     }
 
     /* MEM 라벨 갱신 */
@@ -312,16 +324,6 @@ void mem_btn_event_cb(lv_event_t * e)
         snprintf(buf, sizeof(buf), "MEM: %u", n_vlue);
         lv_label_set_text(ui->lbl_mem, buf);
     }
-
-    // lv_label_set_text(ui->lbl_mem, "MEM: 0");
-    // /* INT 라벨 갱신 */
-    // if(ui->lbl_interlock) {
-    //     char buf[16];
-    //     // snprintf(buf, sizeof(buf), "INT: %u", m);
-    //     snprintf(buf, sizeof(buf), "INT: %lu", (unsigned long)n_vlue);
-    //     lv_label_set_text(ui->lbl_interlock, buf);
-    // }
-
 
     Mem_window_close(ui);
 }

@@ -247,6 +247,9 @@ void Mode_window_close(ui_strobe_t * ui)
 
     ui->MODE_panel = NULL;
     ui->MODE_btn_close = NULL;
+
+    /*모드가 바뀌었을 수 있으니 테이블 표시 갱신 */
+    widgets_table_refresh(ui);
 }
 
 void mode_btn_event_cb(lv_event_t * e)
