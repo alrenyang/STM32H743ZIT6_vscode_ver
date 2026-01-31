@@ -12,7 +12,7 @@ void CH_open(ui_strobe_t * ui)
     lv_obj_remove_style_all(ui->CH_panel_mask);
     lv_obj_set_size(ui->CH_panel_mask, DISP_W, DISP_H);
     lv_obj_set_pos(ui->CH_panel_mask, 0, 0);
-    lv_obj_set_style_bg_opa(ui->CH_panel_mask, LV_OPA_50, 0);
+    lv_obj_set_style_bg_opa(ui->CH_panel_mask, LV_OPA_80, 0);
     lv_obj_set_style_bg_color(ui->CH_panel_mask, lv_color_black(), 0);
     lv_obj_add_flag(ui->CH_panel_mask, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(ui->CH_panel_mask, CHPannel_mask_event_cb, LV_EVENT_CLICKED, ui);
@@ -185,7 +185,7 @@ void CH_open(ui_strobe_t * ui)
     lv_group_focus_obj(ui->chk_save_all);
 
     if(!ui->ch_timer) {
-        ui->ch_timer = lv_timer_create(ch_edit_timer_cb, 5, ui);
+        ui->ch_timer = lv_timer_create(ch_edit_timer_cb, 20, ui);
     } else {
         lv_timer_resume(ui->ch_timer);
         lv_timer_set_period(ui->ch_timer, 5);
@@ -503,7 +503,7 @@ void ch_edit_timer_cb(lv_timer_t * t)
         table_format_cell(ui, r, c);
     }
 
-    lv_obj_invalidate(ui->tbl_body); /* 디버그/확실한 리프레시용 */
+    // lv_obj_invalidate(ui->tbl_body); /* 디버그/확실한 리프레시용 */
 }
 
 void ch_panel_refresh(ui_strobe_t * ui)
@@ -651,7 +651,7 @@ int calc_encoder_step(int diff)
 
     int step;
     if      (dt <= 200)  step = 1000;
-    else if (dt <= 400)  step = 100;
+    else if (dt <= 500)  step = 100;
     else                 step = 1;
 
     step *= base;

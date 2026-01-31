@@ -67,6 +67,11 @@ void baud_btn_event_cb(lv_event_t * e)
     }
 }
 
+static void ip_apply_to_user_ip(ui_strobe_t * ui)
+{
+    for(int i = 0; i < 4; i++) user_ip[i] = ui->ip_cell[i].value;
+}
+
 void ip_cell_event_cb(lv_event_t * e)
 {
     ip_cell_ctx_t * ctx = (ip_cell_ctx_t *)lv_event_get_user_data(e);
@@ -76,20 +81,69 @@ void ip_cell_event_cb(lv_event_t * e)
     uint8_t idx = ctx->idx;
     if(idx >= 4) return;
 
-    if(lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+    lv_event_code_t code = lv_event_get_code(e);
 
-    /* 값 증가 */
-    ui->ip_cell[idx].value = (uint8_t)((ui->ip_cell[idx].value + 1) % 256);
+    /* 1) 엔코더 누름(=CLICK/ENTER) : 편집 모드 토글 */
+    if(code == LV_EVENT_CLICKED) {
+        if(ui->grp_setting) {
+            bool edit = lv_group_get_editing(ui->grp_setting);
+            lv_group_set_editing(ui->grp_setting, !edit);
 
-    char buf[4];
-    lv_snprintf(buf, sizeof(buf), "%u", (unsigned)ui->ip_cell[idx].value);
-    lv_label_set_text(ui->ip_cell[idx].lbl, buf);
+            /* 선택 상태 표시(원하면) */
+            if(!edit) lv_obj_add_state(ui->ip_cell[idx].btn, LV_STATE_CHECKED);
+            else      lv_obj_clear_state(ui->ip_cell[idx].btn, LV_STATE_CHECKED);
+        }
+        return;
+    }
 
-    /* 실제 user_ip[]도 즉시 반영 */
-    for(int i = 0; i < 4; i++) {
-        user_ip[i] = ui->ip_cell[i].value;
+    /* 2) 엔코더 회전은 LV_EVENT_KEY로 들어옴 (편집 모드일 때만 처리) */
+    if(code == LV_EVENT_KEY) {
+        if(!ui->grp_setting) return;
+        if(!lv_group_get_editing(ui->grp_setting)) return;  // 편집 모드 아닐 땐 포커스 이동 유지
+
+        uint32_t key = lv_event_get_key(e);
+
+        if(key == LV_KEY_RIGHT) {
+            ui->ip_cell[idx].value = (uint8_t)((ui->ip_cell[idx].value + 1) & 0xFF);
+        } else if(key == LV_KEY_LEFT) {
+            ui->ip_cell[idx].value = (uint8_t)((ui->ip_cell[idx].value - 1) & 0xFF);
+        } else {
+            return;
+        }
+
+        char buf[4];
+        lv_snprintf(buf, sizeof(buf), "%u", (unsigned)ui->ip_cell[idx].value);
+        lv_label_set_text(ui->ip_cell[idx].lbl, buf);
+
+        ip_apply_to_user_ip(ui);
+        return;
     }
 }
+
+
+// void ip_cell_event_cb(lv_event_t * e)
+// {
+//     ip_cell_ctx_t * ctx = (ip_cell_ctx_t *)lv_event_get_user_data(e);
+//     if(!ctx || !ctx->ui) return;
+
+//     ui_strobe_t * ui = ctx->ui;
+//     uint8_t idx = ctx->idx;
+//     if(idx >= 4) return;
+
+//     if(lv_event_get_code(e) != LV_EVENT_CLICKED) return;
+
+//     /* 값 증가 */
+//     ui->ip_cell[idx].value = (uint8_t)((ui->ip_cell[idx].value + 1) % 256);
+
+//     char buf[4];
+//     lv_snprintf(buf, sizeof(buf), "%u", (unsigned)ui->ip_cell[idx].value);
+//     lv_label_set_text(ui->ip_cell[idx].lbl, buf);
+
+//     /* 실제 user_ip[]도 즉시 반영 */
+//     for(int i = 0; i < 4; i++) {
+//         user_ip[i] = ui->ip_cell[i].value;
+//     }
+// }
 /*-----------------------------------------------------------*/
 // setting window 모드키 누르면 팝업창 생성
 /*-----------------------------------------------------------*/
@@ -106,7 +160,7 @@ void Setting_window_open(ui_strobe_t * ui)
     lv_obj_remove_style_all(ui->SETTING_mask);
     lv_obj_set_size(ui->SETTING_mask, DISP_W, DISP_H);
     lv_obj_set_pos(ui->SETTING_mask, 0, 0);
-    lv_obj_set_style_bg_opa(ui->SETTING_mask, LV_OPA_50, 0);
+    lv_obj_set_style_bg_opa(ui->SETTING_mask, LV_OPA_80, 0);
     lv_obj_set_style_bg_color(ui->SETTING_mask, lv_color_black(), 0);
     lv_obj_add_flag(ui->SETTING_mask, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_clear_flag(ui->SETTING_mask, LV_OBJ_FLAG_SCROLLABLE);
@@ -250,10 +304,9 @@ void Setting_window_open(ui_strobe_t * ui)
         s_ip_ctx[i].ui  = ui;
         s_ip_ctx[i].idx = (uint8_t)i;
 
-        lv_obj_add_event_cb(ui->ip_cell[i].btn,
-                            ip_cell_event_cb,
-                            LV_EVENT_CLICKED,
-                            &s_ip_ctx[i]);
+        lv_obj_add_event_cb(ui->ip_cell[i].btn, ip_cell_event_cb, LV_EVENT_CLICKED, &s_ip_ctx[i]);
+        lv_obj_add_event_cb(ui->ip_cell[i].btn, ip_cell_event_cb, LV_EVENT_KEY,     &s_ip_ctx[i]);
+
 
         /* 점(.) */
         if(i < 3) {

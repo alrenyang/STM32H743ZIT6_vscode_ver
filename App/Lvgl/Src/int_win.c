@@ -77,7 +77,7 @@ void Int_window_open(ui_strobe_t * ui)
     lv_obj_remove_style_all(ui->INT_mask);
     lv_obj_set_size(ui->INT_mask, DISP_W, DISP_H);
     lv_obj_set_pos(ui->INT_mask, 0, 0);
-    lv_obj_set_style_bg_opa(ui->INT_mask, LV_OPA_50, 0);
+    lv_obj_set_style_bg_opa(ui->INT_mask, LV_OPA_80, 0);
     lv_obj_set_style_bg_color(ui->INT_mask, lv_color_black(), 0);
     lv_obj_add_flag(ui->INT_mask, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(ui->INT_mask, Int_mask_event_cb, LV_EVENT_CLICKED, ui);

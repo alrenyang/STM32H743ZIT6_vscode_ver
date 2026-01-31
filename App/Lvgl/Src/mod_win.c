@@ -51,7 +51,7 @@ void Mode_window_open(ui_strobe_t * ui)
     lv_obj_remove_style_all(ui->MODE_mask);
     lv_obj_set_size(ui->MODE_mask, DISP_W, DISP_H);
     lv_obj_set_pos(ui->MODE_mask, 0, 0);
-    lv_obj_set_style_bg_opa(ui->MODE_mask, LV_OPA_50, 0);
+    lv_obj_set_style_bg_opa(ui->MODE_mask, LV_OPA_80, 0);
     lv_obj_set_style_bg_color(ui->MODE_mask, lv_color_black(), 0);
     lv_obj_add_flag(ui->MODE_mask, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(ui->MODE_mask, Mode_mask_event_cb, LV_EVENT_CLICKED, ui);

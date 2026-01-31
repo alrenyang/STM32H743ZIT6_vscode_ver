@@ -77,7 +77,7 @@ void Mem_window_open(ui_strobe_t * ui)
     lv_obj_remove_style_all(ui->MEM_mask);
     lv_obj_set_size(ui->MEM_mask, DISP_W, DISP_H);
     lv_obj_set_pos(ui->MEM_mask, 0, 0);
-    lv_obj_set_style_bg_opa(ui->MEM_mask, LV_OPA_50, 0);
+    lv_obj_set_style_bg_opa(ui->MEM_mask, LV_OPA_80, 0);
     lv_obj_set_style_bg_color(ui->MEM_mask, lv_color_black(), 0);
     lv_obj_add_flag(ui->MEM_mask, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(ui->MEM_mask, Mem_mask_event_cb, LV_EVENT_CLICKED, ui);

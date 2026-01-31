@@ -168,7 +168,7 @@ int main(void)
 
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_8, GPIO_PIN_SET);	//DISP Control
   HAL_Delay(250); // Datasheet: Wait T2 (250ms min) after DISP High before turning on Backlight
-  HAL_GPIO_WritePin(GPIOA, LCD_BAK_Pin, GPIO_PIN_SET);	//LCD Backlight Enable
+  HAL_GPIO_WritePin(GPIOA, LCD_BAK_Pin, GPIO_PIN_RESET);	//LCD Backlight off
 
   packet_init();
   HAL_Delay(1000);
@@ -831,8 +831,13 @@ void StartDefaultTask(void const * argument)
   btcp_connect = tcp_server_init(Port_No);
   UNLOCK_TCPIP_CORE();
 
+  memset((void*)FrameBuffer, 0x00, LCD_WIDTH * LCD_HEIGHT * 2);
+  SCB_CleanDCache_by_Addr((uint32_t*)FrameBuffer, LCD_WIDTH * LCD_HEIGHT * 2);
+
   LCD_ShowLogo();
   SCB_CleanDCache_by_Addr((uint32_t *)FrameBuffer, LCD_WIDTH * LCD_HEIGHT * 2); // 2 bytes per pixel
+  // 로고 준비 끝났으면 백라이트 ON
+  HAL_GPIO_WritePin(GPIOA, LCD_BAK_Pin, GPIO_PIN_SET);
   osDelay(2000);
 
   lv_init();	//lvgl init
@@ -866,7 +871,7 @@ void StartDefaultTask(void const * argument)
       }
     }
     
-    lv_tick_inc(1);
+    lv_tick_inc(2);
     lv_port_indev_poll_5ms();	//키 및 로터리 스캔
     lv_timer_handler();
 
