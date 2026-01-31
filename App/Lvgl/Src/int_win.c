@@ -1,35 +1,6 @@
 #include "int_win.h"
 #include <stdint.h>
 
-static lv_style_t st_set_btn;        // 기본 버튼
-static lv_style_t st_set_btn_focus;  // 포커스/선택 강조
-static bool st_set_btn_inited = false;
-
-static void setwin_init_styles(void)
-{
-    if(st_set_btn_inited) return;
-    st_set_btn_inited = true;
-
-    /* 기본 버튼 */
-    lv_style_init(&st_set_btn);
-    lv_style_set_radius(&st_set_btn, 6);
-    lv_style_set_border_width(&st_set_btn, 1);
-    lv_style_set_border_color(&st_set_btn, lv_color_hex(0x2DE0C7));
-    lv_style_set_bg_opa(&st_set_btn, LV_OPA_COVER);
-    lv_style_set_bg_color(&st_set_btn, lv_color_hex(0x0B1118));
-    lv_style_set_text_color(&st_set_btn, lv_color_white());
-    lv_style_set_pad_hor(&st_set_btn, 8);
-    lv_style_set_pad_ver(&st_set_btn, 4);
-
-    /* 포커스/선택(강조) */
-    lv_style_init(&st_set_btn_focus);
-    lv_style_set_border_width(&st_set_btn_focus, 2);
-    lv_style_set_border_color(&st_set_btn_focus, lv_color_hex(0xFFD54A)); /* 강조색 */
-    lv_style_set_bg_opa(&st_set_btn_focus, LV_OPA_COVER);
-    lv_style_set_bg_color(&st_set_btn_focus, lv_color_hex(0x12303A));     /* 살짝 밝게 */
-    lv_style_set_text_color(&st_set_btn_focus, lv_color_white());
-}
-
 void Int_window_close(ui_strobe_t * ui)
 {
     if(!ui) return;
@@ -82,7 +53,7 @@ void Int_window_open(ui_strobe_t * ui)
     lv_obj_add_flag(ui->INT_mask, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(ui->INT_mask, Int_mask_event_cb, LV_EVENT_CLICKED, ui);
 
-    setwin_init_styles();
+    ui_styles_init_set_btn();
     /* ★ 중요: 스크롤로 엔코더 회전이 소비되는 것 방지 */
     lv_obj_clear_flag(ui->INT_mask, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -143,25 +114,24 @@ void Int_window_open(ui_strobe_t * ui)
     lv_obj_t * b_mode5 = mode_make_btn(content, "8");
 
     /* Setting 창과 동일한 버튼 톤/강조 */
-    lv_obj_add_style(b_mode1, &st_set_btn, 0);
-    lv_obj_add_style(b_mode1, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_mode1, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_mode1, &g_st_set_btn, 0);
+    lv_obj_add_style(b_mode1, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_mode1, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
-    lv_obj_add_style(b_mode2, &st_set_btn, 0);
-    lv_obj_add_style(b_mode2, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_mode2, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_mode2, &g_st_set_btn, 0);
+    lv_obj_add_style(b_mode2, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_mode2, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
-    lv_obj_add_style(b_mode3, &st_set_btn, 0);
-    lv_obj_add_style(b_mode3, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_mode3, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_mode3, &g_st_set_btn, 0);
+    lv_obj_add_style(b_mode3, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_mode3, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
-    lv_obj_add_style(b_mode4, &st_set_btn, 0);
-    lv_obj_add_style(b_mode4, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_mode4, &st_set_btn_focus, LV_STATE_PRESSED);
-
-    lv_obj_add_style(b_mode5, &st_set_btn, 0);
-    lv_obj_add_style(b_mode5, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_mode5, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_mode4, &g_st_set_btn, 0);
+    lv_obj_add_style(b_mode4, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_mode4, &g_st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_mode5, &g_st_set_btn, 0);
+    lv_obj_add_style(b_mode5, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_mode5, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
     lv_obj_set_size(b_mode1, LV_PCT(100), LV_PCT(100));
     lv_obj_set_size(b_mode2, LV_PCT(100), LV_PCT(100));
@@ -205,9 +175,9 @@ void Int_window_open(ui_strobe_t * ui)
     lv_obj_center(lbl);
 
     /* Setting 창과 동일한 CLOSE 톤/강조 */
-    lv_obj_add_style(ui->INT_btn_close, &st_set_btn, 0);
-    lv_obj_add_style(ui->INT_btn_close, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(ui->INT_btn_close, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(ui->INT_btn_close, &g_st_set_btn, 0);
+    lv_obj_add_style(ui->INT_btn_close, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(ui->INT_btn_close, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
     /* ================= Group (Encoder/Keypad) ================= */
     ui->INT_grp_prev = s_group;

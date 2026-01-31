@@ -1,35 +1,5 @@
 #include "mem_win.h"
 
-
-static lv_style_t st_set_btn;        // 기본 버튼
-static lv_style_t st_set_btn_focus;  // 포커스/선택 강조
-static bool st_set_btn_inited = false;
-
-static void setwin_init_styles(void)
-{
-    if(st_set_btn_inited) return;
-    st_set_btn_inited = true;
-
-    /* 기본 버튼 */
-    lv_style_init(&st_set_btn);
-    lv_style_set_radius(&st_set_btn, 6);
-    lv_style_set_border_width(&st_set_btn, 1);
-    lv_style_set_border_color(&st_set_btn, lv_color_hex(0x2DE0C7));
-    lv_style_set_bg_opa(&st_set_btn, LV_OPA_COVER);
-    lv_style_set_bg_color(&st_set_btn, lv_color_hex(0x0B1118));
-    lv_style_set_text_color(&st_set_btn, lv_color_white());
-    lv_style_set_pad_hor(&st_set_btn, 8);
-    lv_style_set_pad_ver(&st_set_btn, 4);
-
-    /* 포커스/선택(강조) */
-    lv_style_init(&st_set_btn_focus);
-    lv_style_set_border_width(&st_set_btn_focus, 2);
-    lv_style_set_border_color(&st_set_btn_focus, lv_color_hex(0xFFD54A)); /* 강조색 */
-    lv_style_set_bg_opa(&st_set_btn_focus, LV_OPA_COVER);
-    lv_style_set_bg_color(&st_set_btn_focus, lv_color_hex(0x12303A));     /* 살짝 밝게 */
-    lv_style_set_text_color(&st_set_btn_focus, lv_color_white());
-}
-
 void Mem_window_close(ui_strobe_t * ui)
 {
     if(!ui) return;
@@ -82,7 +52,7 @@ void Mem_window_open(ui_strobe_t * ui)
     lv_obj_add_flag(ui->MEM_mask, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(ui->MEM_mask, Mem_mask_event_cb, LV_EVENT_CLICKED, ui);
 
-    setwin_init_styles();
+    ui_styles_init_set_btn();
     /* ★ 중요: 스크롤로 엔코더 회전이 소비되는 것 방지 */
     lv_obj_clear_flag(ui->MEM_mask, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -157,17 +127,17 @@ void Mem_window_open(ui_strobe_t * ui)
     lv_obj_set_width(b_save2, 48);
     lv_obj_set_width(b_save3, 48);
 
-    lv_obj_add_style(b_save1, &st_set_btn, 0);
-    lv_obj_add_style(b_save1, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_save1, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_save1, &g_st_set_btn, 0);
+    lv_obj_add_style(b_save1, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_save1, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
-    lv_obj_add_style(b_save2, &st_set_btn, 0);
-    lv_obj_add_style(b_save2, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_save2, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_save2, &g_st_set_btn, 0);
+    lv_obj_add_style(b_save2, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_save2, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
-    lv_obj_add_style(b_save3, &st_set_btn, 0);
-    lv_obj_add_style(b_save3, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_save3, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_save3, &g_st_set_btn, 0);
+    lv_obj_add_style(b_save3, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_save3, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
     lv_obj_set_user_data(b_save1, (void *)(intptr_t)0);
     lv_obj_set_user_data(b_save2, (void *)(intptr_t)1);
@@ -210,17 +180,17 @@ void Mem_window_open(ui_strobe_t * ui)
     lv_obj_set_width(b_load2, 48);
     lv_obj_set_width(b_load3, 48);
 
-    lv_obj_add_style(b_load1, &st_set_btn, 0);
-    lv_obj_add_style(b_load1, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_load1, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_load1, &g_st_set_btn, 0);
+    lv_obj_add_style(b_load1, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_load1, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
-    lv_obj_add_style(b_load2, &st_set_btn, 0);
-    lv_obj_add_style(b_load2, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_load2, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_load2, &g_st_set_btn, 0);
+    lv_obj_add_style(b_load2, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_load2, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
-    lv_obj_add_style(b_load3, &st_set_btn, 0);
-    lv_obj_add_style(b_load3, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(b_load3, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(b_load3, &g_st_set_btn, 0);
+    lv_obj_add_style(b_load3, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(b_load3, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
     lv_obj_set_user_data(b_load1, (void *)(intptr_t)3);
     lv_obj_set_user_data(b_load2, (void *)(intptr_t)4);
@@ -242,9 +212,9 @@ void Mem_window_open(ui_strobe_t * ui)
     ui->btn_close = mode_make_btn(row_btn, "CLOSE");
     lv_obj_add_event_cb(ui->btn_close,mem_close_event_cb, LV_EVENT_CLICKED, ui);
 
-    lv_obj_add_style(ui->btn_close, &st_set_btn, 0);
-    lv_obj_add_style(ui->btn_close, &st_set_btn_focus, LV_STATE_FOCUSED);
-    lv_obj_add_style(ui->btn_close, &st_set_btn_focus, LV_STATE_PRESSED);
+    lv_obj_add_style(ui->btn_close, &g_st_set_btn, 0);
+    lv_obj_add_style(ui->btn_close, &g_st_set_btn_focus, LV_STATE_FOCUSED);
+    lv_obj_add_style(ui->btn_close, &g_st_set_btn_focus, LV_STATE_PRESSED);
 
     /* ================= Group (Encoder / Keypad) ================= */
     ui->MEM_grp_prev = s_group;
