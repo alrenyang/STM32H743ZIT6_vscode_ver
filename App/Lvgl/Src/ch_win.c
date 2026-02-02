@@ -454,6 +454,11 @@ void ch_edit_timer_cb(lv_timer_t * t)
 
     st_channel_con * ch = NULL;
 
+    if(g_oper_mode >= 4)
+    {
+        g_oper_mode = 0;
+    }
+
     if(g_oper_mode == 0){   //트리거 모드 일떄
         st_trig_con * conf = get_trigger_con();
         ch = &conf->ch_con[r];
@@ -516,6 +521,11 @@ void ch_panel_refresh(ui_strobe_t * ui)
     // st_channel_con * ch = &conf->ch_con[r];
 
     st_channel_con * ch = NULL;
+
+    if(g_oper_mode >= 4)
+    {
+        g_oper_mode = 0;
+    }
 
     if(g_oper_mode == 0){   //트리거 모드 일떄
         st_trig_con * conf = get_trigger_con();
@@ -592,6 +602,11 @@ void ch_apply_to_all(ui_strobe_t * ui, uint16_t src)
 
     st_channel_con * base = NULL;   // 현재 모드에서 "채널 배열 시작 주소"
     st_channel_con   v;             // 복사할 값(원본 채널 1개)
+
+    if(g_oper_mode >= 4)
+    {
+        g_oper_mode = 0;
+    }
 
     if(g_oper_mode == 0) {
         st_trig_con * conf = get_trigger_con();

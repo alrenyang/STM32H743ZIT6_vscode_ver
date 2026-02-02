@@ -136,6 +136,20 @@ st_seq_con * get_sequence_con(void)
     return &g_seq_con;
 }
 
+static void update_slot_label(ui_strobe_t * ui,lv_obj_t * lbl_slot_info)
+{
+    if(!ui || !lbl_slot_info) return;
+
+    char buf[16];
+    lv_snprintf(buf, sizeof(buf),
+                "SLOT %d/%d",
+                ui->seq_page + 1,   // 0→1, 7→8
+                SLOT_CNT);
+
+    lv_label_set_text(lbl_slot_info, buf);
+}
+
+
 /*-----------------------------------------------------------*/
 // global 키 입력
 /*-----------------------------------------------------------*/
@@ -158,6 +172,7 @@ static void hotkey_poll_cb(lv_timer_t * t)
 
             if(!ui->MODE_mask) Mode_window_open(ui);
             else               Mode_window_close(ui);
+
             break;
 
         case USE_KEY_SET:
@@ -194,9 +209,41 @@ static void hotkey_poll_cb(lv_timer_t * t)
             break;
 
         case USE_KEY_UP:
+            if(g_oper_mode == 1){ //시퀀스 모드 일떄 만.
+                //우선 모든 윈도우를 닫는다.
+                if(ui->CH_panel_mask) CHPannel_close(ui);
+                if(ui->MODE_mask)     Mode_window_close(ui);
+                if(ui->SETTING_mask)  Setting_window_close(ui);
+                if(ui->INT_mask)      Int_window_close(ui);
+                if(ui->MEM_mask)      Mem_window_close(ui);
+
+                /* 슬롯 증가 */
+                if(ui->seq_page < SLOT_MAX) {
+                    ui->seq_page++;
+                    widgets_table_refresh(ui);
+                }
+
+                update_slot_label(ui,ui->lbl_slot_info);
+            }
+            
             break;
 
         case USE_KEY_DOWN:
+            if(g_oper_mode == 1) {
+                //우선 모든 윈도우를 닫는다.
+                if(ui->CH_panel_mask) CHPannel_close(ui);
+                if(ui->MODE_mask)     Mode_window_close(ui);
+                if(ui->SETTING_mask)  Setting_window_close(ui);
+                if(ui->INT_mask)      Int_window_close(ui);
+                if(ui->MEM_mask)      Mem_window_close(ui);
+
+            if(ui->seq_page > SLOT_MIN) {
+                ui->seq_page--;
+                widgets_table_refresh(ui);
+            }
+
+            update_slot_label(ui, ui->lbl_slot_info);
+    }
             break;
 
         case USE_KEY_LOCK:
@@ -205,15 +252,17 @@ static void hotkey_poll_cb(lv_timer_t * t)
         default:
             /* 다른 키: 일괄 닫고 싶으면 여기서 처리 */
             if(ui->CH_panel_mask) CHPannel_close(ui);
-            if(ui->SETTING_mask)  Setting_window_close(ui);
             if(ui->MODE_mask)     Mode_window_close(ui);
+            if(ui->SETTING_mask)  Setting_window_close(ui);
+            if(ui->INT_mask)      Int_window_close(ui);
+            if(ui->MEM_mask)      Mem_window_close(ui);
             break;
     }
 }
 
 /* helper */
 
-static lv_obj_t * make_info_label(lv_obj_t * parent, const char * text)
+lv_obj_t * make_info_label(lv_obj_t * parent, const char * text)
 {
     lv_obj_t * lbl = lv_label_create(parent);
     lv_label_set_text(lbl, text);
@@ -221,8 +270,7 @@ static lv_obj_t * make_info_label(lv_obj_t * parent, const char * text)
     return lbl;
 }
 
-
-static lv_obj_t * make_btn(lv_obj_t * parent, const char * title, bool primary)
+lv_obj_t * make_btn(lv_obj_t * parent, const char * title, bool primary)
 {
     lv_obj_t * btn = lv_btn_create(parent);
     lv_obj_add_style(btn, &st_btn, 0);
@@ -251,6 +299,11 @@ void table_format_cell(ui_strobe_t * ui, uint16_t r, uint16_t c)
 
     st_channel_con * ch = NULL;
 
+    if(g_oper_mode >= 4)
+    {
+        g_oper_mode = 0;
+    }
+        
     if(g_oper_mode == 0){   //트리거 모드 일떄
         st_trig_con * conf = get_trigger_con();
         ch = &conf->ch_con[r];
@@ -384,7 +437,16 @@ ui_strobe_t * widgets_create_strobe_screen(void)
     lv_label_set_text(info_title, "STATUS");
     lv_obj_set_style_text_color(info_title, C_TEAL_TX, 0);
 
-    make_info_label(p_info, "SLOT 2/8");
+    // ui->lbl_slot_info = make_info_label(p_info, "SLOT 1/8");
+    char buf[16];
+    lv_snprintf(buf, sizeof(buf),
+                "SLOT %d/%d",
+                ui->seq_page + 1,   // 0 → 1
+                SLOT_CNT);      // 8
+
+    ui->lbl_slot_info = make_info_label(p_info, buf);
+
+
     make_info_label(p_info, "REPEAT (5)");
 
     char ip_str[32];

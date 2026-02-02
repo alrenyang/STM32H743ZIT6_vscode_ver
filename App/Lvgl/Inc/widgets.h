@@ -34,6 +34,10 @@ typedef enum {
 #define BLOCK_MIN   0
 #define BLOCK_MAX   9999
 
+#define SLOT_MIN   0
+#define SLOT_MAX   7
+#define SLOT_CNT   (SLOT_MAX + 1)   // 8
+
 
 typedef struct {
     lv_obj_t * btn;
@@ -143,6 +147,7 @@ typedef struct {
 
     // lv_obj_t * tag_ip;   // IP tag container
     lv_obj_t * lbl_ip_info;
+    lv_obj_t * lbl_slot_info;
 
 } ui_strobe_t;
 
@@ -157,10 +162,14 @@ void widgets_table_set_cell(ui_strobe_t * ui, uint16_t ch0, uint16_t col, const 
 void table_format_cell(ui_strobe_t * ui, uint16_t row, uint16_t col);
 void widgets_update_ip_label(ui_strobe_t * ui);
 
+lv_obj_t * make_info_label(lv_obj_t * parent, const char * text);
+lv_obj_t * make_btn(lv_obj_t * parent, const char * title, bool primary);
+
 void widgets_table_refresh(ui_strobe_t * ui);
 
 st_trig_con * get_trigger_con(void);    //트리거모드 구조체 얻어옴.
 st_seq_con * get_sequence_con(void);    //시퀀스모드 구조체 얻어옴.
+
 
 #ifdef __cplusplus
 }
