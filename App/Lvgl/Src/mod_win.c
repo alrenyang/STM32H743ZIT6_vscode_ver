@@ -1,4 +1,5 @@
 #include "mod_win.h"
+#include "ax_eeprom_task.h"
 
 
 void mode_start_btn_event_cb(lv_event_t * e)
@@ -219,6 +220,7 @@ void Mode_window_close(ui_strobe_t * ui)
 
     /*모드가 바뀌었을 수 있으니 테이블 표시 갱신 */
     widgets_table_refresh(ui);
+    eeprom_save_sys();
 }
 
 void mode_btn_event_cb(lv_event_t * e)

@@ -582,6 +582,7 @@ void CHPannel_close(ui_strobe_t * ui)
         ui->ch_item_val[i] = NULL;
     }
 
+    eeprom_save_sys();
 }
 
 void ch_apply_to_all(ui_strobe_t * ui, uint16_t src)

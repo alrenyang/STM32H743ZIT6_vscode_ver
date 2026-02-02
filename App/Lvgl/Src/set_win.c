@@ -398,6 +398,7 @@ void Setting_window_close(ui_strobe_t * ui)
     }
 
     ui->btn_close = NULL;
+    eeprom_save_sys();
 }
 
 

@@ -25,6 +25,7 @@ void Int_window_close(ui_strobe_t * ui)
 
     ui->INT_panel = NULL;
     ui->INT_btn_close = NULL;
+    eeprom_save_sys();
 }
 
 void Int_mask_event_cb(lv_event_t * e)
