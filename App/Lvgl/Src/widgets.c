@@ -112,12 +112,12 @@ static void styles_init(void)
     lv_style_init(&g_st_row_focus);
     lv_style_set_bg_color(&g_st_row_focus, lv_color_hex(0x0F2430));
     lv_style_set_bg_opa(&g_st_row_focus, LV_OPA_COVER);
-    lv_style_set_outline_color(&g_st_row_focus, C_TEAL);
+    lv_style_set_outline_color(&g_st_row_focus, lv_color_hex(0xFFD54A));
     lv_style_set_outline_width(&g_st_row_focus, 1);
     lv_style_set_outline_pad(&g_st_row_focus, 0);
-    lv_style_set_radius(&g_st_row_focus, 10);
-    lv_style_set_pad_left(&g_st_row_focus, 1);
-    lv_style_set_pad_right(&g_st_row_focus, 1);
+    lv_style_set_radius(&g_st_row_focus,  0);
+    lv_style_set_pad_left(&g_st_row_focus, 0);
+    lv_style_set_pad_right(&g_st_row_focus, 0);
 }
 
 st_trig_con * get_trigger_con(void)
@@ -397,7 +397,7 @@ ui_strobe_t * widgets_create_strobe_screen(void)
 
 
     lv_obj_t * hint = lv_label_create(p_info);
-    lv_label_set_text(hint, "rs232: not\n(GIU only)");
+    lv_label_set_text(hint, "Key lock:\n unlock");
     lv_obj_set_style_text_color(hint, C_DIM, 0);
 
     ui->header = lv_obj_create(ui->scr);
