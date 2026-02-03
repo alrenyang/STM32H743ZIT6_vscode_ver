@@ -457,10 +457,13 @@ ui_strobe_t * widgets_create_strobe_screen(void)
 
     ui->lbl_ip_info = make_info_label(p_info, ip_str);
 
+    ui->int_str = lv_label_create(p_info);
+    lv_label_set_text(ui->int_str, "start: 1");
+    lv_obj_set_style_text_color(ui->int_str, C_DIM, 0);
 
-    lv_obj_t * hint = lv_label_create(p_info);
-    lv_label_set_text(hint, "Key lock:\n unlock");
-    lv_obj_set_style_text_color(hint, C_DIM, 0);
+    ui->int_end = lv_label_create(p_info);
+    lv_label_set_text(ui->int_end, "end: 8");
+    lv_obj_set_style_text_color(ui->int_end, C_DIM, 0);
 
     ui->header = lv_obj_create(ui->scr);
     lv_obj_remove_style_all(ui->header);

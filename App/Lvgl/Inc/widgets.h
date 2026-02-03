@@ -63,6 +63,9 @@ typedef struct {
     lv_obj_t * lbl_interlock;
     lv_obj_t * lbl_comm;
 
+    lv_obj_t * int_str;
+    lv_obj_t * int_end;
+
     /* Main action buttons (footer) */
     lv_obj_t * btn_start;
     lv_obj_t * btn_stop;
@@ -148,6 +151,17 @@ typedef struct {
     // lv_obj_t * tag_ip;   // IP tag container
     lv_obj_t * lbl_ip_info;
     lv_obj_t * lbl_slot_info;
+
+    lv_obj_t * int_btn_pick[5];
+    lv_obj_t * int_btn_start;
+    lv_obj_t * int_btn_end;
+
+    uint8_t int_pick_target;   // 0=start, 1=end
+    uint8_t int_start_value;   // 1/2/4/6/8
+    uint8_t int_end_value;     // 1/2/4/6/8
+
+    lv_obj_t * int_btn_selected;   // 마지막으로 선택된 INT 버튼
+    uint8_t int_sel_idx;
 
 } ui_strobe_t;
 
