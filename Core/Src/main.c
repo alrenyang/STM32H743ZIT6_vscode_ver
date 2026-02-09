@@ -23,8 +23,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
+#include "stm32h743xx.h"
+#include "stm32h7xx_hal_cortex.h"
 #include "tcp_ip.h"
 #include "lwip/tcp.h"
 #include "lwip/pbuf.h"
@@ -37,6 +40,7 @@
 #include "widgets.h"
 #include "hw.h"
 #include <stdio.h>
+#include <sys/types.h>
 #include "user_def.h"
 #include "ax_uart2.h"
 #include "packet_task.h"
@@ -79,6 +83,8 @@ SDRAM_HandleTypeDef hsdram1;
 osThreadId MainTaskHandle;
 /* USER CODE BEGIN PV */
 
+static void MX_NVIC_Init(void);
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -100,6 +106,11 @@ uint16_t Port_No = 5001;
 uint32_t g_rs232_baud = 115200;
 
 volatile bool btcp_connect = false;
+
+#define U2_RX_BUF_SZ 256  //uart 버퍼 크기
+volatile uint8_t u2_rx_buf[U2_RX_BUF_SZ];
+volatile uint16_t u2_rx_w = 0;
+uint8_t rx2_data = 0;
 
 uint8_t g_tcp_recv_buffer[TCP_RECV_BUF_SIZE];	//TCP로 데이터를 받는다...
 volatile uint32_t g_tcp_recv_len = 0;
@@ -159,6 +170,7 @@ int main(void)
   MX_DMA2D_Init();
   MX_LTDC_Init();
   /* USER CODE BEGIN 2 */
+  MX_NVIC_Init();
 
   //LAN8742 RESET PIN
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, GPIO_PIN_RESET);
@@ -174,6 +186,11 @@ int main(void)
   HAL_Delay(1000);
 
   setvbuf(stdout, NULL, _IONBF, 0); // No buffering
+
+  HAL_StatusTypeDef st = HAL_UART_Receive_IT(&huart2, &rx2_data, 1);
+  if(st != HAL_OK) {
+    uart2_puts("\r\nUSART2 Receive_IT failed\r\n");
+  }
 
   printf("\r\n\r\n App Start 2025. 12. 10b \r\n");
   uart2_puts("\r\n\r\n [Debug] App Start 2025. 12. 10b \r\n");
@@ -335,6 +352,26 @@ static void MX_DMA2D_Init(void)
 
   /* USER CODE END DMA2D_Init 2 */
 
+}
+
+static void MX_NVIC_Init(void)
+{
+//   /* DMA2D_IRQn interrupt configuration */
+//   HAL_NVIC_SetPriority(DMA2D_IRQn, 5, 0);
+//   HAL_NVIC_EnableIRQ(DMA2D_IRQn);
+  HAL_NVIC_SetPriority(USART2_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(USART2_IRQn);
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART2)
+  {
+    u2_rx_buf[u2_rx_w++ % U2_RX_BUF_SZ] = rx2_data;
+
+    // 다음 바이트 수신 재개
+    HAL_UART_Receive_IT(&huart2, &rx2_data, 1);
+  }
 }
 
 /**
@@ -800,7 +837,28 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART2)
+    {
+        uint32_t error_code = HAL_UART_GetError(huart);
+        printf("UART2 Error: 0x%lX\r\n", error_code);
+        
+        // Clear the error flags
+        __HAL_UART_CLEAR_FLAG(huart, UART_CLEAR_OREF | UART_CLEAR_NEF | UART_CLEAR_FEF);
 
+        // Restart the reception
+        HAL_UART_Receive_IT(&huart2, &rx2_data, 1);
+    }
+}
+
+void HAL_UART_AbortCpltCallback(UART_HandleTypeDef *huart)
+{
+	if (huart->Instance == USART2)
+	{
+		printf("UART2 Abort Complete\r\n");
+	}
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -860,6 +918,8 @@ void StartDefaultTask(void const * argument)
     {
       pre_time = HAL_GetTick();
       HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_12);
+
+      uart2_puts("\r\n\r\n [Debug] App Start 2025. 12. 10b \r\n");
 
       if(g_tcp_new_data_flag)
       {
@@ -937,6 +997,22 @@ void MPU_Config(void)
   MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
 
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Number = MPU_REGION_NUMBER4;
+  MPU_InitStruct.BaseAddress = 0x40000000;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_512MB;
+  MPU_InitStruct.SubRegionDisable = 0x0;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
   /* Enables the MPU */
   HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 

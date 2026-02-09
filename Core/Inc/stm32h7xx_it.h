@@ -57,7 +57,7 @@ void ETH_IRQHandler(void);
 void LTDC_IRQHandler(void);
 void LTDC_ER_IRQHandler(void);
 /* USER CODE BEGIN EFP */
-
+void USART2_IRQHandler(void);
 /* USER CODE END EFP */
 
 #ifdef __cplusplus
